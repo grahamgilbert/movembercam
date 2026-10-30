@@ -1,2 +1,21 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0"><channel><title>MovemberCam Prereleases</title><link>https://github.com/grahamgilbert/movembercam/releases</link><description>Prerelease updates for MovemberCam</description></channel></rss>
+<?xml version='1.0' encoding='utf-8'?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>MovemberCam Prereleases</title>
+    <link>https://github.com/grahamgilbert/movembercam/releases</link>
+    <description>Prerelease updates for MovemberCam</description>
+    <item>
+      <title>MovemberCam 1.0.1</title>
+      <pubDate>Fri, 30 Oct 2026 21:10:16 +0000</pubDate>
+      <sparkle:version>6</sparkle:version>
+      <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <link>https://github.com/grahamgilbert/movembercam/releases/tag/v1.0.1</link>
+      <sparkle:releaseNotesLink sparkle:edSignature="BO/gvEtm20lPZxrPs9b34IvVSx4Fas9bVt608vAfhAnse68KBmAGGjHaqTMtLe5+rAzW6BuCVEKw1Xn/BvdJAQ==" length="272">https://github.com/grahamgilbert/movembercam/releases/download/v1.0.1/release-notes-1.0.1.html</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/grahamgilbert/movembercam/releases/download/v1.0.1/MovemberCam-1.0.1.dmg" length="1677487" type="application/octet-stream" sparkle:edSignature="zvdgtOUG9JNAnqWmMz1NGhhKU/jRvKw7rCqRIayBsMHuia17a4aGaQl7VVULvbDpOzS6lKyvCHE9ei/flH4nDQ==" />
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: GbadIO/+C4E9juObt7ayT0oLBBi8NBPU8kJ0IPLsWW3OaF5/9zctVPJfvhCJTZLw3n5YDccZzRCXpLaEb5L7Cg==
+length: 1281
+-->
