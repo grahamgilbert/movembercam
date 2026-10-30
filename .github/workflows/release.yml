@@ -48,7 +48,7 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
         run: bash Scripts/ci-setup-signing.sh
       - name: Build signed and notarized DMG
-        run: bash Scripts/build-dmg.sh --notarize "$MOVEMBER_NOTARY_PROFILE"
+        run: bash Scripts/ci-build-release.sh
       - name: Save release artifacts
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -26,7 +26,7 @@ for variable, filename in [("BUILD_CERTIFICATE_BASE64", "certificate.p12"),
     (directory / filename).write_bytes(base64.b64decode(encoded, validate=True))
 PY
 security cms -D -i "$signing_dir/app.provisionprofile" > "$signing_dir/profile.plist"
-profile_uuid="$(python3 - "$signing_dir/profile.plist" <<'PY'
+python3 - "$signing_dir/profile.plist" <<'PY'
 import datetime
 import os
 import plistlib
@@ -36,8 +36,6 @@ with open(sys.argv[1], "rb") as stream:
     profile = plistlib.load(stream)
 team = os.environ["APPLE_TEAM_ID"]
 entitlements = profile.get("Entitlements", {})
-if profile.get("IsXcodeManaged") or profile.get("Name", "").startswith("Mac Team Direct Provisioning Profile:"):
-    sys.exit("Create a manually managed Developer ID profile in the Apple Developer portal; Xcode-managed profiles cannot be used with CI manual signing.")
 if profile.get("TeamIdentifier") != [team]:
     sys.exit("Provisioning profile does not belong to APPLE_TEAM_ID.")
 if entitlements.get("com.apple.application-identifier") != team + ".com.grahamgilbert.MovemberCam":
@@ -49,15 +47,8 @@ if entitlements.get("get-task-allow") or entitlements.get("com.apple.security.ge
 if profile["ExpirationDate"] <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None):
     sys.exit("Provisioning profile has expired.")
 uuid.UUID(profile["UUID"])
-print(profile["UUID"])
+print("Validated the MovemberCam Developer ID provisioning profile.")
 PY
-)"
-for directory in "$HOME/Library/MobileDevice/Provisioning Profiles" \
-  "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
-  mkdir -p "$directory"
-  cp "$signing_dir/app.provisionprofile" "$directory/$profile_uuid.provisionprofile"
-done
-printf '%s\n' "$profile_uuid" > "$signing_dir/profile-uuid"
 
 keychain_path="$signing_dir/signing.keychain-db"
 keychain_password="$(openssl rand -base64 32)"
@@ -74,13 +65,12 @@ cat > Config/Signing.xcconfig <<EOF
 DEVELOPMENT_TEAM = $APPLE_TEAM_ID
 CODE_SIGN_STYLE = Manual
 CODE_SIGN_IDENTITY = Developer ID Application
-MOVEMBER_APP_PROFILE = $profile_uuid
 EOF
 xcrun notarytool store-credentials movember-release --keychain "$keychain_path" \
   --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD"
 {
-  printf 'MOVEMBER_SIGNING_STYLE=manual\n'
-  printf 'MOVEMBER_APP_PROFILE=%s\n' "$profile_uuid"
+  printf 'MOVEMBER_TEAM_ID=%s\n' "$APPLE_TEAM_ID"
+  printf 'MOVEMBER_PROFILE_PATH=%s/app.provisionprofile\n' "$signing_dir"
   printf 'MOVEMBER_NOTARY_PROFILE=movember-release\n'
   printf 'MOVEMBER_NOTARY_KEYCHAIN=%s\n' "$keychain_path"
 } >> "$GITHUB_ENV"

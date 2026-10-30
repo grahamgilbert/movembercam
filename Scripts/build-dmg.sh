@@ -151,8 +151,25 @@ trap - EXIT
 if [[ -n "$notary_profile" ]]; then
   notary_args=(--keychain-profile "$notary_profile")
   if [[ -n "${MOVEMBER_NOTARY_KEYCHAIN:-}" ]]; then notary_args+=(--keychain "$MOVEMBER_NOTARY_KEYCHAIN"); fi
-  xcrun notarytool submit "$output_path" "${notary_args[@]}" --wait
-  xcrun stapler staple "$output_path"
+  submission_result="$project_root/build/dmg/notary-submission.json"
+  for attempt in 1 2 3; do
+    if xcrun notarytool submit "$output_path" "${notary_args[@]}" --wait --output-format json > "$submission_result"; then break; fi
+    [[ "$attempt" -lt 3 ]] || exit 1
+    printf 'Notary service request failed; retrying (%s/3).\n' "$attempt" >&2
+    sleep 2
+  done
+  notary_status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$submission_result")"
+  if [[ "$notary_status" != Accepted ]]; then
+    submission_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$submission_result")"
+    xcrun notarytool log "$submission_id" "${notary_args[@]}" > "$project_root/build/dmg/notary-log.json" || true
+    printf 'Apple notarization status: %s. See build/dmg/notary-log.json.\n' "$notary_status" >&2
+    exit 1
+  fi
+  for attempt in 1 2 3 4 5; do
+    if xcrun stapler staple "$output_path"; then break; fi
+    [[ "$attempt" -lt 5 ]] || exit 1
+    sleep 3
+  done
   xcrun stapler validate "$output_path"
 fi
 (cd "$(dirname "$output_path")" && shasum -a 256 "$(basename "$output_path")") > "$output_path.sha256"
