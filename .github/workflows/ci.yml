@@ -37,6 +37,8 @@ jobs:
           swift test --xunit-output build/verification/unit-tests.xml
       - name: Video and QR integration checks
         run: bash Scripts/verify.sh
+      - name: Release signing unit tests
+        run: python3 -m unittest discover -s Tests/Signing -v
       - name: Build app and camera extension without distribution secrets
         run: bash Scripts/build.sh preview
       - name: Upload test results

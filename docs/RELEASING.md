@@ -38,10 +38,11 @@ The workflow creates the release only after tests, signing, notarization, and pa
 
 ```sh
 swift test
+python3 -m unittest discover -s Tests/Signing -v
 bash Scripts/verify.sh
 bash Scripts/build.sh preview
 ```
 
-The unit tests cover link validation and boundaries, independent written and QR URLs, persistence and migration, and setup readiness. The integration checks render synthetic camera frames and use Vision to read the QR code and text, verify mirroring and overlay bypass, and check QR readability after downscaling.
+The unit tests cover link validation and boundaries, independent written and QR URLs, persistence and migration, setup readiness, certificate/profile matching, and the camera extension's required Mach service/App Group relationship after an unsigned build. The integration checks render synthetic camera frames and use Vision to read the QR code and text, verify mirroring and overlay bypass, and check QR readability after downscaling.
 
 For local distribution builds, use `bash Scripts/build-dmg.sh --notarize PROFILE` with an existing `notarytool` profile, or `--notarize-xcode` with the developer account signed into Xcode. The first mode notarizes and staples the DMG itself; the Xcode mode packages an app that already has its notarization ticket stapled.
