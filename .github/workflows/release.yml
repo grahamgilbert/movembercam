@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag to release, for example v1.0.0'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.tag || github.ref }}
+
+  release:
+    name: Sign, notarize, and publish DMG
+    needs: verify
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify tag and app version
+        run: bash Scripts/ci-check-release.sh "$RELEASE_TAG"
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Configure signing and notarization
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.SIGNING_CERTIFICATE_P12_BASE64 }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
+          APP_PROVISIONING_PROFILE_BASE64: ${{ secrets.APP_PROVISIONING_PROFILE_BASE64 }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+        run: bash Scripts/ci-setup-signing.sh
+      - name: Build signed and notarized DMG
+        run: bash Scripts/build-dmg.sh --notarize "$MOVEMBER_NOTARY_PROFILE"
+      - name: Save release artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: MovemberCam-${{ env.RELEASE_TAG }}
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/*.dmg dist/*.sha256 \
+            --verify-tag --title "MovemberCam ${RELEASE_TAG#v}" --generate-notes
+      - name: Remove temporary signing credentials
+        if: always()
+        run: bash Scripts/ci-cleanup-signing.sh

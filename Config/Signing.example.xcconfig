@@ -1,0 +1,2 @@
+DEVELOPMENT_TEAM = YOURTEAMID
+// Automatic signing in Xcode creates the required provisioning profiles.

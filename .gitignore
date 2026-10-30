@@ -1,0 +1,16 @@
+.build/
+build/
+dist/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+Config/Signing.xcconfig
+.swiftpm/
+__pycache__/
+*.pyc
+*.p12
+*.p8
+*.provisionprofile
+*.mobileprovision
+.env

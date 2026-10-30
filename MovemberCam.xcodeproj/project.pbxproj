@@ -1,0 +1,545 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0593FCD403100FD090A72CEB /* SampleBufferPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */; };
+		0B3E4D97849D058D934B2282 /* AppLocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */; };
+		157581DD7B6E2F6D3DDC6BA1 /* VirtualCameraOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B2810BF73DF4B55786C5F89 /* VirtualCameraOutput.swift */; };
+		2388D22C5AD2690F051B1B35 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD8457C9AC1CAD1014E0D8C0 /* main.swift */; };
+		329D510D69EC0C40668CC26D /* ExtensionInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 546EA57C251676D9C922680C /* ExtensionInstaller.swift */; };
+		3C4E511C1656D3F468277231 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F13C21FBB13B49BB0E3490C /* AppModel.swift */; };
+		44385D09462F1BF1CB87F1F7 /* VideoFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */; };
+		4A4EF93B58F61B0DC71FA6DA /* FrameCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0306749076198B08ABD9D2B9 /* FrameCompositor.swift */; };
+		4ABA5943373530BDBE5D489E /* VideoFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */; };
+		4EFB6E8947D32DE8A3F34BDE /* OverlayPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */; };
+		4FDD0AC0C586888EE7F84276 /* OverlayConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */; };
+		5F4706DA19880C54ED7795BD /* SetupReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 995AA212D2DB9EAD5E098E71 /* SetupReadiness.swift */; };
+		82E39BF3301A0E159611EB7A /* MovemberCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */; };
+		86578AFE6B2FF13A7E7878BE /* MovemberMo.png in Resources */ = {isa = PBXBuildFile; fileRef = 1F045AEE9387865A1F981525 /* MovemberMo.png */; };
+		9534D72DFF0D9D632D1DC522 /* NativeWindowStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */; };
+		9A33672A032F5CCA451873A2 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54B8440F130F94398D46C7E /* MainWindow.swift */; };
+		9BB11C7FE1476BDCE4DB2857 /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24046F348AC2E826529C055D /* LoginItemManager.swift */; };
+		9F864BF035B9776FD9560A6C /* CameraExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A3EB3522B71DEED901CC82B0 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = B732EC36E9A7ACED89DB7F16 /* AppIcon.icns */; };
+		B8D6B454BC85745305B38988 /* ZoomVideoEffects.png in Resources */ = {isa = PBXBuildFile; fileRef = 41D84201C22B9D28470EAE15 /* ZoomVideoEffects.png */; };
+		C1F6B1534CAEE9346C65D140 /* ZoomCameraSelection.png in Resources */ = {isa = PBXBuildFile; fileRef = 1C91D2CAC2ED37B32F24E35E /* ZoomCameraSelection.png */; };
+		C9E852182E0BD3FD3BF37BD2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941B1CF348662AE1F0061C09 /* OnboardingView.swift */; };
+		DD0231E821DF2FA817CA0F7D /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */; };
+		E75FA214B877968E2EBB539F /* CameraProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202E3142C9A08EA0678BDB2D /* CameraProvider.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B307D32E006F2333256587D7 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 865CCCD71DE433BD1B7C0A7F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50A9503CE1E48D0FB523BF27;
+			remoteInfo = CameraExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		8EC681A700D209E46EF885E4 /* Embed System Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			files = (
+				9F864BF035B9776FD9560A6C /* CameraExtension.systemextension in Embed System Extensions */,
+			);
+			name = "Embed System Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0306749076198B08ABD9D2B9 /* FrameCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCompositor.swift; sourceTree = "<group>"; };
+		0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayPreferences.swift; sourceTree = "<group>"; };
+		1C91D2CAC2ED37B32F24E35E /* ZoomCameraSelection.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ZoomCameraSelection.png; sourceTree = "<group>"; };
+		1F045AEE9387865A1F981525 /* MovemberMo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = MovemberMo.png; sourceTree = "<group>"; };
+		202E3142C9A08EA0678BDB2D /* CameraProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraProvider.swift; sourceTree = "<group>"; };
+		24046F348AC2E826529C055D /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
+		249F49C705C2C07DF6C22D85 /* MovemberCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MovemberCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovemberCamApp.swift; sourceTree = "<group>"; };
+		41D84201C22B9D28470EAE15 /* ZoomVideoEffects.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ZoomVideoEffects.png; sourceTree = "<group>"; };
+		546EA57C251676D9C922680C /* ExtensionInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionInstaller.swift; sourceTree = "<group>"; };
+		679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocationManager.swift; sourceTree = "<group>"; };
+		6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleBufferPreview.swift; sourceTree = "<group>"; };
+		7F13C21FBB13B49BB0E3490C /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		941B1CF348662AE1F0061C09 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		995AA212D2DB9EAD5E098E71 /* SetupReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupReadiness.swift; sourceTree = "<group>"; };
+		9B2810BF73DF4B55786C5F89 /* VirtualCameraOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualCameraOutput.swift; sourceTree = "<group>"; };
+		AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWindowStyle.swift; sourceTree = "<group>"; };
+		B732EC36E9A7ACED89DB7F16 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormat.swift; sourceTree = "<group>"; };
+		CD8457C9AC1CAD1014E0D8C0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = CameraExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayConfiguration.swift; sourceTree = "<group>"; };
+		E54B8440F130F94398D46C7E /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
+		F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraEngine.swift; sourceTree = "<group>"; };
+		F8248514F69E612AA52E9BC5 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		229FC3D46331D1DBC664B1F9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */,
+				249F49C705C2C07DF6C22D85 /* MovemberCam.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		27B174041F6714FB8BD46178 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				0306749076198B08ABD9D2B9 /* FrameCompositor.swift */,
+				DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */,
+				0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */,
+				995AA212D2DB9EAD5E098E71 /* SetupReadiness.swift */,
+				BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		5BDC70631ABAEAB058E63559 /* CameraExtension */ = {
+			isa = PBXGroup;
+			children = (
+				202E3142C9A08EA0678BDB2D /* CameraProvider.swift */,
+				CD8457C9AC1CAD1014E0D8C0 /* main.swift */,
+			);
+			path = CameraExtension;
+			sourceTree = "<group>";
+		};
+		747BCEE106A5E057265E3594 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				F8248514F69E612AA52E9BC5 /* Base.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		96CEE8B5E9FBEAC9747E3742 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B732EC36E9A7ACED89DB7F16 /* AppIcon.icns */,
+				1F045AEE9387865A1F981525 /* MovemberMo.png */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		B4E1FCCBDCB4D60DDA679A65 = {
+			isa = PBXGroup;
+			children = (
+				CA671212B4326BCF4B3195D5 /* App */,
+				5BDC70631ABAEAB058E63559 /* CameraExtension */,
+				747BCEE106A5E057265E3594 /* Config */,
+				D00E403FC5E929F743642AC2 /* Onboarding */,
+				96CEE8B5E9FBEAC9747E3742 /* Resources */,
+				27B174041F6714FB8BD46178 /* Shared */,
+				229FC3D46331D1DBC664B1F9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		CA671212B4326BCF4B3195D5 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */,
+				7F13C21FBB13B49BB0E3490C /* AppModel.swift */,
+				F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */,
+				546EA57C251676D9C922680C /* ExtensionInstaller.swift */,
+				24046F348AC2E826529C055D /* LoginItemManager.swift */,
+				E54B8440F130F94398D46C7E /* MainWindow.swift */,
+				28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */,
+				AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */,
+				941B1CF348662AE1F0061C09 /* OnboardingView.swift */,
+				6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */,
+				9B2810BF73DF4B55786C5F89 /* VirtualCameraOutput.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D00E403FC5E929F743642AC2 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				1C91D2CAC2ED37B32F24E35E /* ZoomCameraSelection.png */,
+				41D84201C22B9D28470EAE15 /* ZoomVideoEffects.png */,
+			);
+			name = Onboarding;
+			path = Resources/Onboarding;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		50A9503CE1E48D0FB523BF27 /* CameraExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 650489FDED5C78284D675D5A /* Build configuration list for PBXNativeTarget "CameraExtension" */;
+			buildPhases = (
+				530B13150A77FE08FB24173A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CameraExtension;
+			packageProductDependencies = (
+			);
+			productName = CameraExtension;
+			productReference = D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */;
+			productType = "com.apple.product-type.system-extension";
+		};
+		B47732F48705DA3F17BB46F0 /* MovemberCam */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E2CE9A01F4F4E8E292F813C /* Build configuration list for PBXNativeTarget "MovemberCam" */;
+			buildPhases = (
+				AA83705DD0838F2A9477A864 /* Sources */,
+				1FD180F3FE22ED64116D253B /* Resources */,
+				8EC681A700D209E46EF885E4 /* Embed System Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C2A1C4DB455FCB851A39CB05 /* PBXTargetDependency */,
+			);
+			name = MovemberCam;
+			packageProductDependencies = (
+			);
+			productName = MovemberCam;
+			productReference = 249F49C705C2C07DF6C22D85 /* MovemberCam.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		865CCCD71DE433BD1B7C0A7F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					50A9503CE1E48D0FB523BF27 = {
+						ProvisioningStyle = Automatic;
+					};
+					B47732F48705DA3F17BB46F0 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 741658C325321F1CBBEE1718 /* Build configuration list for PBXProject "MovemberCam" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = B4E1FCCBDCB4D60DDA679A65;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 229FC3D46331D1DBC664B1F9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				50A9503CE1E48D0FB523BF27 /* CameraExtension */,
+				B47732F48705DA3F17BB46F0 /* MovemberCam */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1FD180F3FE22ED64116D253B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A3EB3522B71DEED901CC82B0 /* AppIcon.icns in Resources */,
+				86578AFE6B2FF13A7E7878BE /* MovemberMo.png in Resources */,
+				C1F6B1534CAEE9346C65D140 /* ZoomCameraSelection.png in Resources */,
+				B8D6B454BC85745305B38988 /* ZoomVideoEffects.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		530B13150A77FE08FB24173A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E75FA214B877968E2EBB539F /* CameraProvider.swift in Sources */,
+				44385D09462F1BF1CB87F1F7 /* VideoFormat.swift in Sources */,
+				2388D22C5AD2690F051B1B35 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA83705DD0838F2A9477A864 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0B3E4D97849D058D934B2282 /* AppLocationManager.swift in Sources */,
+				3C4E511C1656D3F468277231 /* AppModel.swift in Sources */,
+				DD0231E821DF2FA817CA0F7D /* CameraEngine.swift in Sources */,
+				329D510D69EC0C40668CC26D /* ExtensionInstaller.swift in Sources */,
+				4A4EF93B58F61B0DC71FA6DA /* FrameCompositor.swift in Sources */,
+				9BB11C7FE1476BDCE4DB2857 /* LoginItemManager.swift in Sources */,
+				9A33672A032F5CCA451873A2 /* MainWindow.swift in Sources */,
+				82E39BF3301A0E159611EB7A /* MovemberCamApp.swift in Sources */,
+				9534D72DFF0D9D632D1DC522 /* NativeWindowStyle.swift in Sources */,
+				C9E852182E0BD3FD3BF37BD2 /* OnboardingView.swift in Sources */,
+				4FDD0AC0C586888EE7F84276 /* OverlayConfiguration.swift in Sources */,
+				4EFB6E8947D32DE8A3F34BDE /* OverlayPreferences.swift in Sources */,
+				0593FCD403100FD090A72CEB /* SampleBufferPreview.swift in Sources */,
+				5F4706DA19880C54ED7795BD /* SetupReadiness.swift in Sources */,
+				4ABA5943373530BDBE5D489E /* VideoFormat.swift in Sources */,
+				157581DD7B6E2F6D3DDC6BA1 /* VirtualCameraOutput.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C2A1C4DB455FCB851A39CB05 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 50A9503CE1E48D0FB523BF27 /* CameraExtension */;
+			targetProxy = B307D32E006F2333256587D7 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3F13721785326564FCC80EFD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F8248514F69E612AA52E9BC5 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 5;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		603FCA7265DE621192CBA13E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/App.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = "Config/App-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.grahamgilbert.MovemberCam;
+				PROVISIONING_PROFILE_SPECIFIER = "$(MOVEMBER_APP_PROFILE)";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		816032F4D7E207F203DBA9D7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/App.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = "Config/App-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.grahamgilbert.MovemberCam;
+				PROVISIONING_PROFILE_SPECIFIER = "$(MOVEMBER_APP_PROFILE)";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		8A4156F53006661179958A21 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Extension.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = "Config/Extension-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.grahamgilbert.MovemberCam.CameraExtension;
+				PRODUCT_NAME = com.grahamgilbert.MovemberCam.CameraExtension;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		8D1315783893FB5E850D8FB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/Extension.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = "Config/Extension-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.grahamgilbert.MovemberCam.CameraExtension;
+				PRODUCT_NAME = com.grahamgilbert.MovemberCam.CameraExtension;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		EBA7900E219F299672F7024B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F8248514F69E612AA52E9BC5 /* Base.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 5;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = targeted;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5E2CE9A01F4F4E8E292F813C /* Build configuration list for PBXNativeTarget "MovemberCam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				603FCA7265DE621192CBA13E /* Debug */,
+				816032F4D7E207F203DBA9D7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		650489FDED5C78284D675D5A /* Build configuration list for PBXNativeTarget "CameraExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8A4156F53006661179958A21 /* Debug */,
+				8D1315783893FB5E850D8FB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		741658C325321F1CBBEE1718 /* Build configuration list for PBXProject "MovemberCam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3F13721785326564FCC80EFD /* Debug */,
+				EBA7900E219F299672F7024B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 865CCCD71DE433BD1B7C0A7F /* Project object */;
+}

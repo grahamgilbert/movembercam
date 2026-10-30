@@ -1,0 +1,62 @@
+name: MovemberCam
+options:
+  bundleIdPrefix: com.grahamgilbert
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "5"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_STRICT_CONCURRENCY: targeted
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+targets:
+  MovemberCam:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - Shared
+      - Resources/MovemberMo.png
+      - Resources/AppIcon.icns
+      - path: Resources/Onboarding
+        excludes:
+          - "*.md"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.grahamgilbert.MovemberCam
+        INFOPLIST_FILE: Config/App-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/App.entitlements
+        COMBINE_HIDPI_IMAGES: YES
+        PROVISIONING_PROFILE_SPECIFIER: $(MOVEMBER_APP_PROFILE)
+    dependencies:
+      - target: CameraExtension
+        embed: true
+        codeSign: true
+  CameraExtension:
+    type: system-extension
+    platform: macOS
+    sources:
+      - CameraExtension
+      - Shared/VideoFormat.swift
+    settings:
+      base:
+        PRODUCT_NAME: com.grahamgilbert.MovemberCam.CameraExtension
+        PRODUCT_BUNDLE_IDENTIFIER: com.grahamgilbert.MovemberCam.CameraExtension
+        INFOPLIST_FILE: Config/Extension-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Extension.entitlements
+        SKIP_INSTALL: YES
+schemes:
+  MovemberCam:
+    build:
+      targets:
+        MovemberCam: all
+    run:
+      config: Debug
+    archive:
+      config: Release
