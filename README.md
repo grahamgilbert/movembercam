@@ -2,7 +2,15 @@
 
 A native macOS app that adds your fundraising QR code, the official Movember Mo, and a written URL to a real camera feed. Select **MovemberCam** as your camera in Zoom or another video app.
 
-Requires macOS 14 or later and Xcode 15 or later. Sparkle is bundled for automatic updates.
+**Unofficial project:** MovemberCam is an independent fundraising tool. It is not affiliated with, endorsed by, or sponsored by Movember or Zoom. Their names, trademarks, and logos belong to their respective owners.
+
+[Download the latest signed and notarized release](https://github.com/grahamgilbert/movembercam/releases/latest). Requires macOS 14 or later; Xcode 15 or later is needed only to build from source. Sparkle is bundled for automatic updates.
+
+## Screenshots
+
+Drag MovemberCam into Applications to install it.
+
+![MovemberCam DMG showing the app icon, a moustache and arrow, and an Applications shortcut](docs/screenshots/installer.png)
 
 For automated builds, signing secrets, notarization, and publishing versioned GitHub releases, see [CI and releases](docs/RELEASING.md).
 
@@ -39,9 +47,9 @@ This makes an ad-hoc signed build for local preview and camera capture. It **can
 2. Copy `Config/Signing.example.xcconfig` to `Config/Signing.xcconfig` and replace `YOURTEAMID` with your team ID. Both targets use that team and automatic signing. Enable the System Extension capability for the app identifier and provision the extension's App Group as needed. Use bundle identifiers registered to your team.
 3. Build the **MovemberCam** scheme, or run `bash Scripts/build.sh signed`. That command may contact Apple's signing service to update provisioning profiles. If this Mac needs to be registered with your developer team, explicitly opt in with `REGISTER_DEVELOPMENT_DEVICE=1 bash Scripts/build.sh signed`.
 4. Copy the resulting **signed** `MovemberCam.app` from `build/Build/Products/Release` into `/Applications`, and launch it from there. Quit any older running copy first.
-5. Click **Install camera**. Approve the extension when macOS prompts you. On recent macOS versions, look in System Settings → General → Login Items & Extensions → Camera Extensions. Follow the macOS prompt if its location differs.
-6. Select your physical camera, set your links, apply the overlay, and click **Start camera**.
-7. Restart Zoom if necessary, then choose **MovemberCam** in its camera picker. Keep MovemberCam running during calls. Zoom's mirrored self-view may reverse the text locally; the transmitted pixels are readable for participants.
+5. Click **Install Virtual Camera** beneath the preview. Approve the extension when macOS prompts you. On recent macOS versions, look in System Settings → General → Login Items & Extensions → Camera Extensions. Follow the macOS prompt if its location differs.
+6. Select your physical camera, set your links, apply the overlay, and click **Start Camera**.
+7. After installing or updating the virtual camera, quit Zoom completely and reopen it, then choose **MovemberCam** in its camera picker. Keep MovemberCam running during calls. Zoom's mirrored self-view may reverse the text locally; the transmitted pixels are readable for participants.
 
 If you change bundle identifiers, update `project.yml`, `Shared/VideoFormat.swift` (`extensionIdentifier`), and the extension's App Group in `Config/Extension.entitlements`. Keep the App Group prefixed by the extension's Mach service name. The app and extension must be signed by the same team. The device/stream UUIDs can remain stable.
 
@@ -55,7 +63,7 @@ For distribution to other Macs, use Developer ID signing and notarization for th
 bash Scripts/build-dmg.sh
 ```
 
-The script archives the app, exports the app and camera extension with your team's **Developer ID Application** certificate, and builds `dist/MovemberCam-1.0.1.dmg` plus a portable SHA-256 checksum. The Finder window contains MovemberCam and an Applications shortcut, with a Retina background showing the official Mo and a drag arrow. The background is drawn at build time by `Scripts/RenderDMGBackground.swift`; icon positions and Finder layout are in `Scripts/DMGSettings.py`. `Scripts/RenderAppIcon.swift` generates the camera-and-moustache app icon at every macOS icon size before archiving.
+The script archives the app, exports the app and camera extension with your team's **Developer ID Application** certificate, and builds a versioned DMG in `dist/` plus a portable SHA-256 checksum. The Finder window contains MovemberCam and an Applications shortcut, with a Retina background showing the official Mo and a drag arrow. The background is drawn at build time by `Scripts/RenderDMGBackground.swift`; icon positions and Finder layout are in `Scripts/DMGSettings.py`. `Scripts/RenderAppIcon.swift` generates the camera-and-moustache app icon at every macOS icon size before archiving.
 
 Requires Xcode, Python 3.10+, `Config/Signing.xcconfig`, and a valid Developer ID Application signing identity. The script installs pinned Python packaging dependencies in an isolated `build/dmg-tools` environment and uses `dmgbuild` to write Finder metadata without controlling Finder or requesting Automation permission. Signing and provisioning may contact Apple; the first run also downloads those build dependencies.
 
