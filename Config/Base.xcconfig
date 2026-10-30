@@ -1,3 +1,4 @@
 // Copy Signing.example.xcconfig to Signing.xcconfig and set your team.
 MOVEMBER_PREVIEW_BUILD = NO
+CODE_SIGN_STYLE = Automatic
 #include? "Signing.xcconfig"
