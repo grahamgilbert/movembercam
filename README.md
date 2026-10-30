@@ -8,9 +8,15 @@ A native macOS app that adds your fundraising QR code, the official Movember Mo,
 
 ## Screenshots
 
-Drag MovemberCam into Applications to install it.
+Choose your camera, configure your fundraising links, and preview the overlay in one Settings window.
 
-![MovemberCam DMG showing the app icon, a moustache and arrow, and an Applications shortcut](docs/screenshots/installer.png)
+![MovemberCam Settings with an illustrated demo camera preview](docs/screenshots/settings-demo.png)
+
+| Example overlay | Drag-to-Applications installer |
+| --- | --- |
+| ![Mock camera preview featuring a featureless moustache avatar, Movember logo, QR code, and written URL](docs/screenshots/overlay-demo.png) | ![MovemberCam DMG showing the app icon, a moustache and arrow, and an Applications shortcut](docs/screenshots/installer.png) |
+
+The camera scene is an illustrative mockup, not a real person or home. The QR destination and written URL are independently configurable.
 
 For automated builds, signing secrets, notarization, and publishing versioned GitHub releases, see [CI and releases](docs/RELEASING.md).
 
