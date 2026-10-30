@@ -4,8 +4,8 @@ cd "$(dirname "$0")/.."
 [[ "${GITHUB_ACTIONS:-}" == true && -n "${RUNNER_TEMP:-}" && -n "${GITHUB_ENV:-}" ]] || {
   printf 'This script is for an isolated GitHub Actions macOS runner.\n' >&2; exit 1;
 }
-required=(APPLE_TEAM_ID SIGNING_CERTIFICATE_P12_BASE64 SIGNING_CERTIFICATE_PASSWORD
-  APP_PROVISIONING_PROFILE_BASE64 NOTARY_APPLE_ID NOTARY_APP_PASSWORD)
+required=(APPLE_TEAM_ID BUILD_CERTIFICATE_BASE64 P12_PASSWORD
+  BUILD_PROVISION_PROFILE_BASE64 APPLE_ID APPLE_ID_PASSWORD)
 for name in "${required[@]}"; do
   [[ -n "${!name:-}" ]] || { printf 'Missing release configuration: %s\nSee docs/RELEASING.md.\n' "$name" >&2; exit 1; }
 done
@@ -20,8 +20,8 @@ import base64
 import os
 import pathlib
 directory = pathlib.Path(os.environ["MOVEMBER_SIGNING_DIRECTORY"])
-for variable, filename in [("SIGNING_CERTIFICATE_P12_BASE64", "certificate.p12"),
-                           ("APP_PROVISIONING_PROFILE_BASE64", "app.provisionprofile")]:
+for variable, filename in [("BUILD_CERTIFICATE_BASE64", "certificate.p12"),
+                           ("BUILD_PROVISION_PROFILE_BASE64", "app.provisionprofile")]:
     encoded = "".join(os.environ[variable].split())
     (directory / filename).write_bytes(base64.b64decode(encoded, validate=True))
 PY
@@ -65,7 +65,7 @@ printf '::add-mask::%s\n' "$keychain_password"
 security create-keychain -p "$keychain_password" "$keychain_path"
 security set-keychain-settings -lut 21600 "$keychain_path"
 security unlock-keychain -p "$keychain_password" "$keychain_path"
-security import "$signing_dir/certificate.p12" -P "$SIGNING_CERTIFICATE_PASSWORD" \
+security import "$signing_dir/certificate.p12" -P "$P12_PASSWORD" \
   -t cert -f pkcs12 -k "$keychain_path" -T /usr/bin/codesign -T /usr/bin/security
 security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$keychain_password" "$keychain_path" >/dev/null
 security list-keychains -d user -s "$keychain_path"
@@ -77,7 +77,7 @@ CODE_SIGN_IDENTITY = Developer ID Application
 MOVEMBER_APP_PROFILE = $profile_uuid
 EOF
 xcrun notarytool store-credentials movember-release --keychain "$keychain_path" \
-  --apple-id "$NOTARY_APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$NOTARY_APP_PASSWORD"
+  --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD"
 {
   printf 'MOVEMBER_SIGNING_STYLE=manual\n'
   printf 'MOVEMBER_APP_PROFILE=%s\n' "$profile_uuid"
