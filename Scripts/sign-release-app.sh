@@ -14,6 +14,7 @@ cp "$profile_path" "$app_path/Contents/embedded.provisionprofile"
 # Build outputs must not carry Finder/resource-fork metadata into their code signatures.
 xattr -cr "$app_path"
 identity="$(cat build/release-entitlements/identity)"
+python3 Scripts/nested_signing.py "$app_path/Contents/Frameworks/Sparkle.framework" "$identity"
 sign_bundle() {
   local entitlements="$1" bundle="$2" attempt
   for attempt in 1 2 3; do

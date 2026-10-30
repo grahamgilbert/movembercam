@@ -2,7 +2,7 @@
 
 A native macOS app that adds your fundraising QR code, the official Movember Mo, and a written URL to a real camera feed. Select **MovemberCam** as your camera in Zoom or another video app.
 
-Requires macOS 14 or later and Xcode 15 or later. There are no third-party runtime dependencies.
+Requires macOS 14 or later and Xcode 15 or later. Sparkle is bundled for automatic updates.
 
 For automated builds, signing secrets, notarization, and publishing versioned GitHub releases, see [CI and releases](docs/RELEASING.md).
 
@@ -14,9 +14,10 @@ When launched outside `/Applications`, the app offers **Move to Applications and
 - Configure the QR destination and written URL independently; settings persist between launches.
 - Preview the actual composited frames sent to the virtual camera, at 1280 × 720 and up to 30 fps.
 - Use the moustache menu bar icon to **Enable overlay**, start/stop the camera, reopen settings, or quit. MovemberCam runs as a menu bar app without a Dock icon. Disabling the overlay keeps the camera feed running. Closing the settings window keeps the app running in the menu bar.
-- A first-run setup guide walks through camera access, installation, Zoom selection with actual settings screenshots, and checking the received QR code. Reopen it from Help → MovemberCam Setup Guide, the menu bar, or the settings window. Guide progress is saved; finishing requires confirming the Zoom/QR check and detecting the installed camera.
-- Choose **Open at Login** during setup or later under **Startup** in settings. This uses macOS Login Items and stays off until you opt in. Launching the app does not automatically start camera capture.
+- One native Settings window handles camera permission, installation, fundraising links, login, and updates. Opening Settings again brings the same window forward.
+- Choose **Open at Login** under **Startup** in Settings. This uses macOS Login Items and stays off until you opt in. Launching the app does not automatically start camera capture.
 - Position the QR card at the bottom left or right. Mirror only the physical camera image; the QR and text stay readable.
+- Check for signed updates every hour, or use **Check for Updates…** in Settings, the app menu, or the menu bar. Prerelease updates are an optional setting.
 - Stop capture to release the physical camera. The extension sends an empty dark frame when the app stops or stops delivering fresh frames for half a second.
 
 Both URLs default to `https://movember.com/t/musta-ch`. Press **Apply Changes** after editing settings to save the URLs, QR position and mirroring in macOS preferences; applied settings survive quitting and relaunching. The menu bar overlay toggle and camera selection save immediately, without applying other edits. Unapplied overlay edits are not saved.
@@ -54,7 +55,7 @@ For distribution to other Macs, use Developer ID signing and notarization for th
 bash Scripts/build-dmg.sh
 ```
 
-The script archives the app, exports the app and camera extension with your team's **Developer ID Application** certificate, and builds `dist/MovemberCam-1.0.0.dmg` plus a portable SHA-256 checksum. The Finder window contains MovemberCam and an Applications shortcut, with a Retina background showing the official Mo and a drag arrow. The background is drawn at build time by `Scripts/RenderDMGBackground.swift`; icon positions and Finder layout are in `Scripts/DMGSettings.py`. `Scripts/RenderAppIcon.swift` generates the camera-and-moustache app icon at every macOS icon size before archiving.
+The script archives the app, exports the app and camera extension with your team's **Developer ID Application** certificate, and builds `dist/MovemberCam-1.0.1.dmg` plus a portable SHA-256 checksum. The Finder window contains MovemberCam and an Applications shortcut, with a Retina background showing the official Mo and a drag arrow. The background is drawn at build time by `Scripts/RenderDMGBackground.swift`; icon positions and Finder layout are in `Scripts/DMGSettings.py`. `Scripts/RenderAppIcon.swift` generates the camera-and-moustache app icon at every macOS icon size before archiving.
 
 Requires Xcode, Python 3.10+, `Config/Signing.xcconfig`, and a valid Developer ID Application signing identity. The script installs pinned Python packaging dependencies in an isolated `build/dmg-tools` environment and uses `dmgbuild` to write Finder metadata without controlling Finder or requesting Automation permission. Signing and provisioning may contact Apple; the first run also downloads those build dependencies.
 
@@ -86,6 +87,7 @@ The provided app's signing is preserved; a development-signed input remains a de
 
 ```sh
 swift test
+python3 -m unittest discover -s Tests/Signing -v
 bash Scripts/verify.sh
 ```
 
@@ -99,6 +101,6 @@ End-to-end virtual camera installation and Zoom testing require the signed/appro
 
 The preview displays video frames directly with `AVSampleBufferDisplayLayer`. Virtual-camera discovery and delivery run on a separate worker queue; the preview and virtual output each keep only the newest pending frame so a slow consumer cannot build up seconds of delay.
 
-Video rendering and settings storage are local. The app performs no video uploads, analytics, or link requests. Your meeting app transmits the video when you use MovemberCam in a call.
+Video rendering and settings storage are local. The app does not upload video or contact your fundraising links. Sparkle fetches signed update feeds and downloads from this public GitHub repository. Your meeting app transmits the video when you use MovemberCam in a call.
 
 References: [Apple camera extensions](https://developer.apple.com/documentation/coremediaio/creating-a-camera-extension-with-core-media-i-o), [WWDC Core Media I/O overview](https://developer.apple.com/videos/play/wwdc2022/10022/), and [official Movember fundraising assets](https://uk.movember.com/support-us/workplace-fundraising-assets).

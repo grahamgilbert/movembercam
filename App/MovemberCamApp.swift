@@ -49,24 +49,26 @@ struct MovemberCamApp: App {
     @StateObject private var installer = ExtensionInstaller()
     @StateObject private var loginItem = LoginItemManager()
     @StateObject private var location = AppLocationManager()
+    @StateObject private var updater = AppUpdater()
 
     var body: some Scene {
-        WindowGroup("MovemberCam", id: "main") {
-            MainWindow(model: model, installer: installer, loginItem: loginItem, location: location)
+        Window("MovemberCam", id: "main") {
+            MainWindow(model: model, installer: installer, loginItem: loginItem, location: location, updater: updater)
                 .onAppear { delegate.shutdown = { completion in model.shutdown(completion: completion) } }
         }
         .defaultSize(width: 1280, height: 980)
         .windowStyle(.titleBar)
         .windowResizability(.contentMinSize)
         .commands {
-            SetupGuideCommands()
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…", action: updater.checkForUpdates)
+                    .disabled(!updater.canCheckForUpdates)
+            }
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Camera") {
-                Button(model.isRunning ? "Stop Camera" : "Start Camera") {
-                    if model.isRunning { model.stop() } else { model.start() }
-                }
+                Button(model.cameraControls.title, action: model.performCameraAction)
                 .keyboardShortcut("k", modifiers: [.command])
-                .disabled(model.isBusy || model.selectedCameraID.isEmpty)
+                .disabled(!model.cameraControls.isEnabled)
                 Button("Refresh Cameras", action: model.refreshCameras)
                 Toggle("Enable Overlay", isOn: $model.isOverlayEnabled)
                     .keyboardShortcut("o", modifiers: [.command, .shift])
@@ -75,14 +77,8 @@ struct MovemberCamApp: App {
                 Button("Remove Virtual Camera", action: installer.uninstall).disabled(installer.busy || model.isRunning)
             }
         }
-        Window("MovemberCam Setup", id: "setup") {
-            OnboardingView(model: model, installer: installer, loginItem: loginItem, location: location)
-        }
-        .defaultSize(width: 820, height: 740)
-        .windowStyle(.titleBar)
-        .windowResizability(.contentMinSize)
         MenuBarExtra {
-            MenuBarControls(model: model)
+            MenuBarControls(model: model, updater: updater)
         } label: {
             MenuBarIcon(delegate: delegate)
         }
@@ -101,10 +97,7 @@ struct MenuBarIcon: View {
                 delegate.openSettings = { openWindow(id: "main") }
                 guard !handledRelaunch else { return }
                 handledRelaunch = true
-                if CommandLine.arguments.contains("--show-setup") {
-                    openWindow(id: "setup")
-                    NSApp.activate(ignoringOtherApps: true)
-                } else if CommandLine.arguments.contains("--show-settings") {
+                if CommandLine.arguments.contains("--show-settings") {
                     openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -114,33 +107,22 @@ struct MenuBarIcon: View {
 
 struct MenuBarControls: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var updater: AppUpdater
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Text(model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Camera off")
         Toggle("Enable overlay", isOn: $model.isOverlayEnabled)
-        Button(model.isRunning ? "Stop camera" : "Start camera") {
-            if model.isRunning { model.stop() } else { model.start() }
-        }.disabled(model.isBusy || model.selectedCameraID.isEmpty)
+        Button(model.cameraControls.title, action: model.performCameraAction)
+            .disabled(!model.cameraControls.isEnabled)
         Divider()
         Button("Open settings…") {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
-        Button("Setup guide…") {
-            openWindow(id: "setup")
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        Button("Check for Updates…", action: updater.checkForUpdates)
+            .disabled(!updater.canCheckForUpdates)
         Divider()
         Button("Quit MovemberCam") { NSApp.terminate(nil) }.keyboardShortcut("q")
-    }
-}
-
-struct SetupGuideCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
-    var body: some Commands {
-        CommandGroup(replacing: .help) {
-            Button("MovemberCam Setup Guide…") { openWindow(id: "setup") }
-        }
     }
 }

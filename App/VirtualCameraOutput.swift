@@ -3,7 +3,7 @@ import Foundation
 
 /// CoreMediaIO work runs on its own serial queue. Capture hands off just the latest frame.
 final class VirtualCameraOutput {
-    var onStatus: ((String) -> Void)?
+    var onStatus: ((VirtualCameraStatus) -> Void)?
     private let worker = DispatchQueue(label: "MovemberCam.virtualOutput", qos: .userInitiated)
     private let lock = NSLock()
     private var pending: CMSampleBuffer?
@@ -13,12 +13,15 @@ final class VirtualCameraOutput {
     private var bufferQueue: CMSimpleQueue?
     private var lastProbe: CFAbsoluteTime = 0
     private var deviceListener: CMIOObjectPropertyListenerBlock?
-    private var status = "Virtual camera idle" {
+    private var status = VirtualCameraStatus.idle(isInstalled: false) {
         didSet { if status != oldValue { onStatus?(status) } }
     }
 
     init() {
-        let listener: CMIOObjectPropertyListenerBlock = { [weak self] _, _ in self?.lastProbe = 0 }
+        let listener: CMIOObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.lastProbe = 0
+            self?.refreshAvailabilityOnWorker()
+        }
         deviceListener = listener
         var property = address(kCMIOHardwarePropertyDevices)
         CMIOObjectAddPropertyListenerBlock(CMIOObjectID(kCMIOObjectSystemObject), &property, worker, listener)
@@ -39,6 +42,21 @@ final class VirtualCameraOutput {
         scheduled = true
         lock.unlock()
         worker.async { self.processLatest() }
+    }
+
+    func refreshAvailability() {
+        worker.async { self.refreshAvailabilityOnWorker() }
+    }
+
+    private func refreshAvailabilityOnWorker() {
+        let devices = matchingDeviceIDs()
+        if bufferQueue != nil {
+            if devices.contains(device) { status = .sending } else { stopOnWorker() }
+        } else {
+            status = devices.isEmpty ? .notInstalled : .idle(isInstalled: true)
+        }
+        // Also deliver unchanged snapshots after AppModel attaches its observer.
+        onStatus?(status)
     }
 
     private func processLatest() {
@@ -94,38 +112,43 @@ final class VirtualCameraOutput {
         device = 0
         stream = 0
         lastProbe = 0
-        status = "Virtual camera idle"
+        status = .idle(isInstalled: !matchingDeviceIDs().isEmpty)
     }
 
     private func connect() {
-        for id in objectIDs(CMIOObjectID(kCMIOObjectSystemObject), selector: kCMIOHardwarePropertyDevices) {
-            var property = address(kCMIODevicePropertyDeviceUID)
-            var uid: Unmanaged<CFString>?
-            var used: UInt32 = 0
-            let result = CMIOObjectGetPropertyData(id, &property, 0, nil,
-                UInt32(MemoryLayout.size(ofValue: uid)), &used, &uid)
-            guard result == noErr, let value = uid?.takeRetainedValue(),
-                  (value as String).caseInsensitiveCompare(VideoFormat.deviceID.uuidString) == .orderedSame else { continue }
+        for id in matchingDeviceIDs() {
             let streams = objectIDs(id, selector: kCMIODevicePropertyStreams, scope: kCMIODevicePropertyScopeOutput)
             guard let sink = streams.first else { continue }
             var unmanagedQueue: Unmanaged<CMSimpleQueue>?
             let queueResult = CMIOStreamCopyBufferQueue(sink, { _, _, _ in }, nil, &unmanagedQueue)
             guard queueResult == noErr, let queue = unmanagedQueue?.takeRetainedValue() else {
-                status = "Cannot open virtual camera (\(queueResult))"
+                status = .cannotOpen(queueResult)
                 return
             }
             let startResult = CMIODeviceStartStream(id, sink)
             guard startResult == noErr else {
-                status = startResult == -4 ? "Virtual camera rejected the connection" : "Cannot start virtual camera (\(startResult))"
+                status = .cannotStart(startResult)
                 return
             }
             device = id
             stream = sink
             bufferQueue = queue
-            status = "Sending to MovemberCam"
+            status = .sending
             return
         }
-        status = "Virtual camera not installed"
+        status = .notInstalled
+    }
+
+    private func matchingDeviceIDs() -> [CMIODeviceID] {
+        objectIDs(CMIOObjectID(kCMIOObjectSystemObject), selector: kCMIOHardwarePropertyDevices).filter { id in
+            var property = address(kCMIODevicePropertyDeviceUID)
+            var uid: Unmanaged<CFString>?
+            var used: UInt32 = 0
+            let result = CMIOObjectGetPropertyData(id, &property, 0, nil,
+                UInt32(MemoryLayout.size(ofValue: uid)), &used, &uid)
+            guard result == noErr, let value = uid?.takeRetainedValue() else { return false }
+            return (value as String).caseInsensitiveCompare(VideoFormat.deviceID.uuidString) == .orderedSame
+        }
     }
 
     private func address(_ selector: Int,

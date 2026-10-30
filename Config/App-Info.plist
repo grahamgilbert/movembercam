@@ -17,4 +17,11 @@
     <key>NSSystemExtensionUsageDescription</key><string>Install the MovemberCam virtual camera so video apps such as Zoom can use your overlaid camera feed.</string>
     <key>NSCameraUseContinuityCameraDeviceType</key><true/>
     <key>MovemberCamPreviewBuild</key><string>$(MOVEMBER_PREVIEW_BUILD)</string>
+    <key>SUFeedURL</key><string>https://raw.githubusercontent.com/grahamgilbert/movembercam/main/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>0bxfU70vjTTL8DXWXqdxVd3iMpNXhtiB9qcdyvY0ES4=</string>
+    <key>SURequireSignedFeed</key><true/>
+    <key>SUVerifyUpdateBeforeExtraction</key><true/>
+    <key>SUEnableInstallerLauncherService</key><false/>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>3600</integer>
 </dict></plist>

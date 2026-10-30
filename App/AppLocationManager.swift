@@ -52,7 +52,7 @@ final class AppLocationManager: ObservableObject {
         do {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.createsNewApplicationInstance = true
-            configuration.arguments = [NSApp.keyWindow?.title == "MovemberCam Setup" ? "--show-setup" : "--show-settings"]
+            configuration.arguments = ["--show-settings"]
             _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
             // Leave the Swift task before AppKit enters its termination run loop.
             RunLoop.main.perform(inModes: [.common]) {

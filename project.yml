@@ -7,13 +7,17 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "5"
+    MARKETING_VERSION: "1.0.1"
+    CURRENT_PROJECT_VERSION: "6"
     ENABLE_HARDENED_RUNTIME: YES
     SWIFT_STRICT_CONCURRENCY: targeted
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle.git
+    exactVersion: "2.10.1"
 targets:
   MovemberCam:
     type: application
@@ -23,9 +27,6 @@ targets:
       - Shared
       - Resources/MovemberMo.png
       - Resources/AppIcon.icns
-      - path: Resources/Onboarding
-        excludes:
-          - "*.md"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.grahamgilbert.MovemberCam
@@ -34,6 +35,7 @@ targets:
         COMBINE_HIDPI_IMAGES: YES
         PROVISIONING_PROFILE_SPECIFIER: $(MOVEMBER_APP_PROFILE)
     dependencies:
+      - package: Sparkle
       - target: CameraExtension
         embed: true
         codeSign: true

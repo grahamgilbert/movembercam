@@ -7,14 +7,15 @@ final class AppModel: ObservableObject {
     @Published var draft: OverlayConfiguration
     @Published private(set) var applied: OverlayConfiguration
     @Published var cameras: [CameraChoice] = []
-    @Published var virtualCameraAvailable = false
+    @Published private(set) var virtualCameraStatus = VirtualCameraStatus.idle(isInstalled: false)
+    var virtualCameraAvailable: Bool { virtualCameraStatus.isInstalled }
+    var outputStatus: String { virtualCameraStatus.message }
     @Published private(set) var selectedCameraID = ""
     let previewFeed = VideoPreviewFeed()
     @Published var isRunning = false
     @Published var isBusy = false
     @Published var isApplying = false
     @Published var error: String?
-    @Published var outputStatus = "Virtual camera idle"
     @Published var cameraDenied = false
     @Published var isOverlayEnabled = true {
         didSet {
@@ -37,7 +38,7 @@ final class AppModel: ObservableObject {
             isOverlayEnabled = UserDefaults.standard.object(forKey: "MovemberCam.overlayEnabled") as? Bool ?? true
             engine.setOverlayEnabled(isOverlayEnabled)
             engine.onPreview = { [weak self] sample in self?.previewFeed.sample = sample }
-            engine.onOutputStatus = { [weak self] status in Task { @MainActor in self?.outputStatus = status } }
+            engine.onOutputStatus = { [weak self] status in Task { @MainActor in self?.virtualCameraStatus = status } }
             engine.onFailure = { [weak self] message in
                 Task { @MainActor in
                     guard let self else { return }
@@ -61,13 +62,40 @@ final class AppModel: ObservableObject {
     }
 
     var hasChanges: Bool { draft != applied }
+    var cameraControls: CameraControlState {
+        let permission: CameraControlState.Permission
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: permission = .allowed
+        case .notDetermined: permission = .notRequested
+        default: permission = .blocked
+        }
+        return CameraControlState(permission: permission, isRunning: isRunning, isBusy: isBusy, hasCamera: !selectedCameraID.isEmpty)
+    }
+
+    func performCameraAction() {
+        switch cameraControls.action {
+        case .start: start()
+        case .stop: stop()
+        case .openSettings: openCameraSettings()
+        case .requestAccess:
+            guard !isBusy else { return }
+            isBusy = true
+            Task {
+                let authorized = await AVCaptureDevice.requestAccess(for: .video)
+                cameraDenied = !authorized
+                error = authorized ? nil : "Allow MovemberCam in System Settings → Privacy & Security → Camera."
+                isBusy = false
+                refreshCameras()
+            }
+        }
+    }
     var validationMessage: String? {
         do { _ = try draft.validated(); return nil } catch { return error.localizedDescription }
     }
 
     func refreshCameras() {
         cameras = CameraEngine.cameras()
-        virtualCameraAvailable = CameraEngine.virtualCameraAvailable
+        engine?.refreshVirtualCameraAvailability()
         if !cameras.contains(where: { $0.id == selectedCameraID }) {
             if isRunning || isBusy {
                 stop()
@@ -151,7 +179,7 @@ final class AppModel: ObservableObject {
                 guard let self, self.generation == token else { return }
                 self.isRunning = false
                 self.isBusy = false
-                self.outputStatus = "Virtual camera idle"
+                self.virtualCameraStatus = .idle(isInstalled: self.virtualCameraAvailable)
                 if restarting { self.start() }
             }
         }

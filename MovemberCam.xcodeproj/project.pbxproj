@@ -7,28 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		012DA3E8F75CB8EECE87CEB9 /* VirtualCameraStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAA9897C658157DABE9482AB /* VirtualCameraStatus.swift */; };
 		0593FCD403100FD090A72CEB /* SampleBufferPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */; };
 		0B3E4D97849D058D934B2282 /* AppLocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */; };
 		157581DD7B6E2F6D3DDC6BA1 /* VirtualCameraOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B2810BF73DF4B55786C5F89 /* VirtualCameraOutput.swift */; };
 		2388D22C5AD2690F051B1B35 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD8457C9AC1CAD1014E0D8C0 /* main.swift */; };
 		329D510D69EC0C40668CC26D /* ExtensionInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 546EA57C251676D9C922680C /* ExtensionInstaller.swift */; };
+		3AD8C58464E19EF501A4CD0A /* UpdateChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1AF005CC2E616FC336E66D1 /* UpdateChannel.swift */; };
 		3C4E511C1656D3F468277231 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F13C21FBB13B49BB0E3490C /* AppModel.swift */; };
 		44385D09462F1BF1CB87F1F7 /* VideoFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */; };
 		4A4EF93B58F61B0DC71FA6DA /* FrameCompositor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0306749076198B08ABD9D2B9 /* FrameCompositor.swift */; };
 		4ABA5943373530BDBE5D489E /* VideoFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */; };
 		4EFB6E8947D32DE8A3F34BDE /* OverlayPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */; };
 		4FDD0AC0C586888EE7F84276 /* OverlayConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */; };
-		5F4706DA19880C54ED7795BD /* SetupReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 995AA212D2DB9EAD5E098E71 /* SetupReadiness.swift */; };
+		70F16E9B31AA844BFBAD1D29 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = EB42B1B72F614C435D96C3E7 /* Sparkle */; };
 		82E39BF3301A0E159611EB7A /* MovemberCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */; };
 		86578AFE6B2FF13A7E7878BE /* MovemberMo.png in Resources */ = {isa = PBXBuildFile; fileRef = 1F045AEE9387865A1F981525 /* MovemberMo.png */; };
 		9534D72DFF0D9D632D1DC522 /* NativeWindowStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */; };
 		9A33672A032F5CCA451873A2 /* MainWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54B8440F130F94398D46C7E /* MainWindow.swift */; };
 		9BB11C7FE1476BDCE4DB2857 /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24046F348AC2E826529C055D /* LoginItemManager.swift */; };
 		9F864BF035B9776FD9560A6C /* CameraExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A0C8E1D13E548BA75E82F66C /* CameraControlState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0577CF381EA23F673578BC /* CameraControlState.swift */; };
 		A3EB3522B71DEED901CC82B0 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = B732EC36E9A7ACED89DB7F16 /* AppIcon.icns */; };
-		B8D6B454BC85745305B38988 /* ZoomVideoEffects.png in Resources */ = {isa = PBXBuildFile; fileRef = 41D84201C22B9D28470EAE15 /* ZoomVideoEffects.png */; };
-		C1F6B1534CAEE9346C65D140 /* ZoomCameraSelection.png in Resources */ = {isa = PBXBuildFile; fileRef = 1C91D2CAC2ED37B32F24E35E /* ZoomCameraSelection.png */; };
-		C9E852182E0BD3FD3BF37BD2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941B1CF348662AE1F0061C09 /* OnboardingView.swift */; };
+		D80506501ED8AA36DB5903B7 /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EDD83F43AF123C8D5EB589B /* AppUpdater.swift */; };
 		DD0231E821DF2FA817CA0F7D /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */; };
 		E75FA214B877968E2EBB539F /* CameraProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202E3142C9A08EA0678BDB2D /* CameraProvider.swift */; };
 /* End PBXBuildFile section */
@@ -60,21 +61,21 @@
 /* Begin PBXFileReference section */
 		0306749076198B08ABD9D2B9 /* FrameCompositor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCompositor.swift; sourceTree = "<group>"; };
 		0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayPreferences.swift; sourceTree = "<group>"; };
-		1C91D2CAC2ED37B32F24E35E /* ZoomCameraSelection.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ZoomCameraSelection.png; sourceTree = "<group>"; };
+		0EDD83F43AF123C8D5EB589B /* AppUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdater.swift; sourceTree = "<group>"; };
 		1F045AEE9387865A1F981525 /* MovemberMo.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = MovemberMo.png; sourceTree = "<group>"; };
 		202E3142C9A08EA0678BDB2D /* CameraProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraProvider.swift; sourceTree = "<group>"; };
 		24046F348AC2E826529C055D /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
 		249F49C705C2C07DF6C22D85 /* MovemberCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MovemberCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovemberCamApp.swift; sourceTree = "<group>"; };
-		41D84201C22B9D28470EAE15 /* ZoomVideoEffects.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ZoomVideoEffects.png; sourceTree = "<group>"; };
 		546EA57C251676D9C922680C /* ExtensionInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionInstaller.swift; sourceTree = "<group>"; };
 		679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocationManager.swift; sourceTree = "<group>"; };
 		6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleBufferPreview.swift; sourceTree = "<group>"; };
 		7F13C21FBB13B49BB0E3490C /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
-		941B1CF348662AE1F0061C09 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
-		995AA212D2DB9EAD5E098E71 /* SetupReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupReadiness.swift; sourceTree = "<group>"; };
+		8E0577CF381EA23F673578BC /* CameraControlState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraControlState.swift; sourceTree = "<group>"; };
 		9B2810BF73DF4B55786C5F89 /* VirtualCameraOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualCameraOutput.swift; sourceTree = "<group>"; };
+		A1AF005CC2E616FC336E66D1 /* UpdateChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChannel.swift; sourceTree = "<group>"; };
 		AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWindowStyle.swift; sourceTree = "<group>"; };
+		AAA9897C658157DABE9482AB /* VirtualCameraStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualCameraStatus.swift; sourceTree = "<group>"; };
 		B732EC36E9A7ACED89DB7F16 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormat.swift; sourceTree = "<group>"; };
 		CD8457C9AC1CAD1014E0D8C0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -84,6 +85,17 @@
 		F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraEngine.swift; sourceTree = "<group>"; };
 		F8248514F69E612AA52E9BC5 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AD8CDF4BC756439675658408 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70F16E9B31AA844BFBAD1D29 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		229FC3D46331D1DBC664B1F9 /* Products */ = {
@@ -98,11 +110,13 @@
 		27B174041F6714FB8BD46178 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				8E0577CF381EA23F673578BC /* CameraControlState.swift */,
 				0306749076198B08ABD9D2B9 /* FrameCompositor.swift */,
 				DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */,
 				0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */,
-				995AA212D2DB9EAD5E098E71 /* SetupReadiness.swift */,
+				A1AF005CC2E616FC336E66D1 /* UpdateChannel.swift */,
 				BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */,
+				AAA9897C658157DABE9482AB /* VirtualCameraStatus.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -139,7 +153,6 @@
 				CA671212B4326BCF4B3195D5 /* App */,
 				5BDC70631ABAEAB058E63559 /* CameraExtension */,
 				747BCEE106A5E057265E3594 /* Config */,
-				D00E403FC5E929F743642AC2 /* Onboarding */,
 				96CEE8B5E9FBEAC9747E3742 /* Resources */,
 				27B174041F6714FB8BD46178 /* Shared */,
 				229FC3D46331D1DBC664B1F9 /* Products */,
@@ -151,27 +164,17 @@
 			children = (
 				679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */,
 				7F13C21FBB13B49BB0E3490C /* AppModel.swift */,
+				0EDD83F43AF123C8D5EB589B /* AppUpdater.swift */,
 				F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */,
 				546EA57C251676D9C922680C /* ExtensionInstaller.swift */,
 				24046F348AC2E826529C055D /* LoginItemManager.swift */,
 				E54B8440F130F94398D46C7E /* MainWindow.swift */,
 				28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */,
 				AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */,
-				941B1CF348662AE1F0061C09 /* OnboardingView.swift */,
 				6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */,
 				9B2810BF73DF4B55786C5F89 /* VirtualCameraOutput.swift */,
 			);
 			path = App;
-			sourceTree = "<group>";
-		};
-		D00E403FC5E929F743642AC2 /* Onboarding */ = {
-			isa = PBXGroup;
-			children = (
-				1C91D2CAC2ED37B32F24E35E /* ZoomCameraSelection.png */,
-				41D84201C22B9D28470EAE15 /* ZoomVideoEffects.png */,
-			);
-			name = Onboarding;
-			path = Resources/Onboarding;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -200,6 +203,7 @@
 			buildPhases = (
 				AA83705DD0838F2A9477A864 /* Sources */,
 				1FD180F3FE22ED64116D253B /* Resources */,
+				AD8CDF4BC756439675658408 /* Frameworks */,
 				8EC681A700D209E46EF885E4 /* Embed System Extensions */,
 			);
 			buildRules = (
@@ -209,6 +213,7 @@
 			);
 			name = MovemberCam;
 			packageProductDependencies = (
+				EB42B1B72F614C435D96C3E7 /* Sparkle */,
 			);
 			productName = MovemberCam;
 			productReference = 249F49C705C2C07DF6C22D85 /* MovemberCam.app */;
@@ -240,6 +245,9 @@
 			);
 			mainGroup = B4E1FCCBDCB4D60DDA679A65;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4256BB7800E79B6AD34B8AF0 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 229FC3D46331D1DBC664B1F9 /* Products */;
 			projectDirPath = "";
@@ -258,8 +266,6 @@
 			files = (
 				A3EB3522B71DEED901CC82B0 /* AppIcon.icns in Resources */,
 				86578AFE6B2FF13A7E7878BE /* MovemberMo.png in Resources */,
-				C1F6B1534CAEE9346C65D140 /* ZoomCameraSelection.png in Resources */,
-				B8D6B454BC85745305B38988 /* ZoomVideoEffects.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -282,6 +288,8 @@
 			files = (
 				0B3E4D97849D058D934B2282 /* AppLocationManager.swift in Sources */,
 				3C4E511C1656D3F468277231 /* AppModel.swift in Sources */,
+				D80506501ED8AA36DB5903B7 /* AppUpdater.swift in Sources */,
+				A0C8E1D13E548BA75E82F66C /* CameraControlState.swift in Sources */,
 				DD0231E821DF2FA817CA0F7D /* CameraEngine.swift in Sources */,
 				329D510D69EC0C40668CC26D /* ExtensionInstaller.swift in Sources */,
 				4A4EF93B58F61B0DC71FA6DA /* FrameCompositor.swift in Sources */,
@@ -289,13 +297,13 @@
 				9A33672A032F5CCA451873A2 /* MainWindow.swift in Sources */,
 				82E39BF3301A0E159611EB7A /* MovemberCamApp.swift in Sources */,
 				9534D72DFF0D9D632D1DC522 /* NativeWindowStyle.swift in Sources */,
-				C9E852182E0BD3FD3BF37BD2 /* OnboardingView.swift in Sources */,
 				4FDD0AC0C586888EE7F84276 /* OverlayConfiguration.swift in Sources */,
 				4EFB6E8947D32DE8A3F34BDE /* OverlayPreferences.swift in Sources */,
 				0593FCD403100FD090A72CEB /* SampleBufferPreview.swift in Sources */,
-				5F4706DA19880C54ED7795BD /* SetupReadiness.swift in Sources */,
+				3AD8C58464E19EF501A4CD0A /* UpdateChannel.swift in Sources */,
 				4ABA5943373530BDBE5D489E /* VideoFormat.swift in Sources */,
 				157581DD7B6E2F6D3DDC6BA1 /* VirtualCameraOutput.swift in Sources */,
+				012DA3E8F75CB8EECE87CEB9 /* VirtualCameraStatus.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,7 +353,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -365,7 +373,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -481,7 +489,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -495,7 +503,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -538,6 +546,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		4256BB7800E79B6AD34B8AF0 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		EB42B1B72F614C435D96C3E7 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4256BB7800E79B6AD34B8AF0 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 865CCCD71DE433BD1B7C0A7F /* Project object */;
 }

@@ -6,9 +6,7 @@ struct MainWindow: View {
     @ObservedObject var installer: ExtensionInstaller
     @ObservedObject var loginItem: LoginItemManager
     @ObservedObject var location: AppLocationManager
-    @Environment(\.openWindow) private var openWindow
-    @AppStorage("MovemberCam.hasPresentedSetup.v1") private var hasPresentedSetup = false
-    @AppStorage("MovemberCam.setupCompleted.v1") private var setupCompleted = false
+    @ObservedObject var updater: AppUpdater
 
     var body: some View {
         HSplitView {
@@ -21,10 +19,9 @@ struct MainWindow: View {
         .background(NativeWindowStyle(minimumContentSize: CGSize(width: 1160, height: 920)))
         .onAppear {
             location.checkLocation()
-            if !location.isOfferingMove && !hasPresentedSetup && !setupCompleted {
-                hasPresentedSetup = true
-                openWindow(id: "setup")
-            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.refreshCameras()
         }
         .alert("Move MovemberCam to Applications?", isPresented: $location.isOfferingMove) {
             Button("Move to Applications and Restart", action: location.moveAndRestart)
@@ -51,31 +48,14 @@ struct MainWindow: View {
                 }
                 .buttonStyle(.bordered)
                 .fixedSize()
-                Button(action: cameraButtonAction) {
-                    Text(cameraButtonTitle)
+                Button(action: model.performCameraAction) {
+                    Text(model.cameraControls.title)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                 }
                 .buttonStyle(.bordered)
                 .fixedSize()
-                .disabled(model.isBusy || model.selectedCameraID.isEmpty)
-            }
-        }
-    }
-
-    private var cameraButtonTitle: String {
-        if model.isBusy { return "Please Wait…" }
-        if model.isRunning { return "Stop Camera" }
-        return AVCaptureDevice.authorizationStatus(for: .video) == .authorized ? "Start Camera" : "Allow Camera Access…"
-    }
-
-    private func cameraButtonAction() {
-        if model.isRunning {
-            model.stop()
-        } else {
-            switch AVCaptureDevice.authorizationStatus(for: .video) {
-            case .denied, .restricted: model.openCameraSettings()
-            default: model.start()
+                .disabled(!model.cameraControls.isEnabled)
             }
         }
     }
@@ -184,12 +164,16 @@ struct MainWindow: View {
 
                 GroupBox("Using MovemberCam in Zoom") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Follow the setup guide to install the virtual camera and select it in Zoom.")
+                        Text("Start your camera here. In Zoom, open Settings → Video & effects and choose MovemberCam under Camera.")
                             .font(.callout).foregroundStyle(.secondary)
-                        Button("Open Setup Guide…") { openWindow(id: "setup") }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
+                GroupBox("Updates") {
+                    UpdateControls(updater: updater)
+                }
                 Text("Closing this window keeps MovemberCam running in the menu bar.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(24)
         }

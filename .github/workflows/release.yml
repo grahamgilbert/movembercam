@@ -2,6 +2,13 @@ name: Release (Manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: true
+        type: choice
+        options: [prerelease, stable]
+        default: prerelease
 
 permissions:
   contents: read
@@ -58,13 +65,13 @@ jobs:
             dist/*.sha256
           if-no-files-found: error
           retention-days: 30
-      - name: Create GitHub release
+      - name: Publish release and signed Sparkle feeds
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          gh release create "$RELEASE_TAG" dist/*.dmg dist/*.sha256 \
-            --target "$GITHUB_SHA" --title "MovemberCam ${RELEASE_TAG#v}" --generate-notes
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: bash Scripts/ci-publish-update.sh release
       - name: Remove temporary signing credentials
         if: always()
         run: bash Scripts/ci-cleanup-signing.sh

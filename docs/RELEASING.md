@@ -2,7 +2,7 @@
 
 Every push to `main` and every pull request runs the XCTest unit suite, the real video/QR integration checks, and a macOS app plus camera-extension build. These checks need no Apple credentials or camera hardware. Test results and the synthetic overlay render are saved as workflow artifacts.
 
-The Release workflow runs the same checks on the selected commit before it imports signing credentials. It builds a universal Developer ID-signed app, creates the drag-to-Applications DMG, submits the DMG to Apple for notarization, staples and validates the ticket, and creates a GitHub release with the DMG and SHA-256 checksum. Release signing runs only for an explicit manual release, never on pull requests.
+The Release workflow runs the same checks on the selected commit before it imports signing credentials. It builds a universal Developer ID-signed app, creates the drag-to-Applications DMG, submits the DMG to Apple for notarization, staples and validates the ticket, creates a GitHub release with the DMG and SHA-256 checksum, signs the archive and release notes with Sparkle, and commits signed update feeds to `main`. Release signing runs only for an explicit manual release, never on pull requests.
 
 ## One-time GitHub configuration
 
@@ -14,6 +14,7 @@ In **Settings → Secrets and variables → Actions**, add these repository secr
 | `P12_PASSWORD` | The password used to protect the exported `.p12`. |
 | `BUILD_PROVISION_PROFILE_BASE64` | Base64-encoded **Developer ID** provisioning profile for `com.grahamgilbert.MovemberCam`, with the System Extension capability and the certificate in the `.p12`. An existing Xcode-generated Developer ID profile is supported. |
 | `APPLE_ID` | The Apple Account email for the developer team. |
+| `SPARKLE_PRIVATE_KEY` | Sparkle Ed25519 signing key, matching `SUPublicEDKey` in the app plist. Shared from Limpet through the encrypted Actions transfer. |
 | `APPLE_ID_PASSWORD` | An app-specific password created for notarization at [Apple Account](https://account.apple.com/). Use an app-specific password, not your normal account password. |
 
 The signing/notarization secret names match Limpet. Supply your ten-character personal developer team ID as the `APPLE_TEAM_ID` secret or repository variable. The initial repository setup sets this to `9D8XP85393`.
@@ -28,11 +29,19 @@ On the runner, credentials live in a temporary keychain and temporary files. Cle
 
 1. Update `MARKETING_VERSION` and increment `CURRENT_PROJECT_VERSION` in `project.yml`. The app and extension share both values.
 2. Regenerate the checked-in Xcode project with `xcodegen generate`, commit the change, and push `main`.
-3. Open **Actions → Release (Manual) → Run workflow** on `main`, just as for Limpet. The workflow reads `MARKETING_VERSION` from `project.yml`; no pre-created git tag is needed.
+3. Open **Actions → Release (Manual) → Run workflow** on `main`, just as for Limpet. Choose the `prerelease` or `stable` update channel. The workflow reads `MARKETING_VERSION` from `project.yml`; no pre-created git tag is needed.
 
 The successful workflow creates the matching `vMAJOR.MINOR.PATCH` tag at the selected commit and publishes the GitHub release. After adding or correcting secrets, rerun the workflow from Actions.
 
 The workflow creates the release only after tests, signing, notarization, and payload verification succeed. It does not replace an existing published release.
+
+## Sparkle channels
+
+The app checks `appcast.xml` for stable releases, or `appcast-prerelease.xml` when the user opts into prereleases. Automatic checks run every hour. Feeds, release notes, and update archives are signed; the app verifies them using the embedded public key.
+
+Like Limpet, **Actions → Promote to Stable** copies an existing prerelease entry into the stable feed, re-signs the feed, and marks the GitHub release stable. A stable release can also be published directly by choosing `stable` in the release workflow.
+
+Users on 1.0.0 need to install 1.0.1 once to obtain Sparkle. Subsequent updates preserve their preferences.
 
 ## Run checks locally
 
@@ -43,6 +52,6 @@ bash Scripts/verify.sh
 bash Scripts/build.sh preview
 ```
 
-The unit tests cover link validation and boundaries, independent written and QR URLs, persistence and migration, setup readiness, certificate/profile matching, and the camera extension's required Mach service/App Group relationship after an unsigned build. The integration checks render synthetic camera frames and use Vision to read the QR code and text, verify mirroring and overlay bypass, and check QR readability after downscaling.
+The unit tests cover link validation and boundaries, independent written and QR URLs, persistence and migration, camera permissions and installation status, update channels, certificate/profile matching, and the camera extension's required Mach service/App Group relationship after an unsigned build. The integration checks render synthetic camera frames and use Vision to read the QR code and text, verify mirroring and overlay bypass, and check QR readability after downscaling.
 
 For local distribution builds, use `bash Scripts/build-dmg.sh --notarize PROFILE` with an existing `notarytool` profile, or `--notarize-xcode` with the developer account signed into Xcode. The first mode notarizes and staples the DMG itself; the Xcode mode packages an app that already has its notarization ticket stapled.

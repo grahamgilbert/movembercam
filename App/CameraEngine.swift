@@ -8,7 +8,7 @@ struct CameraChoice: Identifiable, Equatable {
 
 final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onPreview: (@MainActor (CMSampleBuffer) -> Void)?
-    var onOutputStatus: ((String) -> Void)?
+    var onOutputStatus: ((VirtualCameraStatus) -> Void)?
     var onFailure: ((String) -> Void)?
 
     private let session = AVCaptureSession()
@@ -53,10 +53,8 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         }.map { CameraChoice(id: $0.uniqueID, name: $0.localizedName) }
     }
 
-    static var virtualCameraAvailable: Bool {
-        discoverySession.devices.contains {
-            $0.uniqueID.caseInsensitiveCompare(VideoFormat.deviceID.uuidString) == .orderedSame
-        }
+    func refreshVirtualCameraAvailability() {
+        virtualCamera.refreshAvailability()
     }
 
     func configure(_ configuration: OverlayConfiguration, completion: @escaping (Error?) -> Void) {
