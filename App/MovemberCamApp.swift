@@ -4,6 +4,18 @@ import Carbon
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var shutdown: ((@escaping () -> Void) -> Void)?
     var openSettings: (() -> Void)?
+    private var handledCaptureResume = false
+    private var launchedAtLogin = false
+
+    @MainActor
+    func settingsDidAppear(model: AppModel) {
+        shutdown = { completion in model.shutdown(completion: completion) }
+        guard !handledCaptureResume else { return }
+        handledCaptureResume = true
+        if LaunchBehavior(arguments: CommandLine.arguments, launchedAtLogin: launchedAtLogin).resumeCamera {
+            model.start()
+        }
+    }
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
     }
@@ -11,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let event = NSAppleEventManager.shared().currentAppleEvent
         let atLogin = event?.paramDescriptor(forKeyword: AEKeyword(keyAELaunchedAsLogInItem)) != nil ||
             event?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == keyAELaunchedAsLogInItem
+        launchedAtLogin = atLogin
         RunLoop.main.perform(inModes: [.common]) {
             MainActor.assumeIsolated {
                 if atLogin { self.settingsWindow?.orderOut(nil) }
@@ -54,7 +67,7 @@ struct MovemberCamApp: App {
     var body: some Scene {
         Window("MovemberCam", id: "main") {
             MainWindow(model: model, installer: installer, loginItem: loginItem, location: location, updater: updater)
-                .onAppear { delegate.shutdown = { completion in model.shutdown(completion: completion) } }
+                .onAppear { delegate.settingsDidAppear(model: model) }
         }
         .defaultSize(width: 1280, height: 980)
         .windowStyle(.titleBar)

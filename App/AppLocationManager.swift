@@ -46,13 +46,17 @@ final class AppLocationManager: ObservableObject {
         }
     }
 
-    func restart() { Task { await relaunch(at: Bundle.main.bundleURL) } }
+    func restart(resumingCamera: Bool) {
+        guard !isMoving else { return }
+        isMoving = true
+        Task { await relaunch(at: Bundle.main.bundleURL, resumingCamera: resumingCamera) }
+    }
 
-    private func relaunch(at url: URL) async {
+    private func relaunch(at url: URL, resumingCamera: Bool = false) async {
         do {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.createsNewApplicationInstance = true
-            configuration.arguments = ["--show-settings"]
+            configuration.arguments = LaunchBehavior.restartArguments(wasCapturing: resumingCamera)
             _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
             // Leave the Swift task before AppKit enters its termination run loop.
             RunLoop.main.perform(inModes: [.common]) {

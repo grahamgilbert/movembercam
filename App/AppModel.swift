@@ -192,6 +192,18 @@ final class AppModel: ObservableObject {
         engine.stop(completion: completion)
     }
 
+    func prepareForRestart(completion: @escaping () -> Void) {
+        guard !isBusy else { return }
+        isBusy = true
+        shutdown {
+            Task { @MainActor in
+                self.isRunning = false
+                self.isBusy = false
+                completion()
+            }
+        }
+    }
+
     func openCameraSettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!)
     }

@@ -121,7 +121,13 @@ struct MainWindow: View {
                     }
                 }
                 if installer.needsAppRestart {
-                    Button("Restart MovemberCam", action: location.restart)
+                    Button("Restart MovemberCam") {
+                        let wasCapturing = model.isRunning
+                        model.prepareForRestart {
+                            location.restart(resumingCamera: wasCapturing)
+                        }
+                    }
+                    .disabled(model.isBusy || location.isMoving)
                 }
             }
             Section("Startup") {
