@@ -122,10 +122,7 @@ struct MainWindow: View {
                 }
                 if installer.needsAppRestart {
                     Button("Restart MovemberCam") {
-                        let wasCapturing = model.isRunning
-                        model.prepareForRestart {
-                            location.restart(resumingCamera: wasCapturing)
-                        }
+                        restartAfterInstallation()
                     }
                     .disabled(model.isBusy || location.isMoving)
                 }
@@ -170,8 +167,34 @@ struct MainWindow: View {
 
                 GroupBox("Using MovemberCam in Zoom") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Start your camera here. In Zoom, open Settings → Video & effects and choose MovemberCam under Camera.")
-                            .font(.callout).foregroundStyle(.secondary)
+                        if model.virtualCameraAvailable {
+                            Label("Virtual camera installed", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        } else {
+                            Text("First, install the virtual camera so Zoom can use your overlay.")
+                                .font(.callout.weight(.semibold))
+                            if location.isInApplications {
+                                Button(installer.busy ? "Installing…" : "Install Virtual Camera", action: installer.install)
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(installer.busy)
+                            } else {
+                                Button("Move to Applications and Restart", action: location.moveAndRestart)
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(location.isMoving)
+                            }
+                            Text(installer.message).font(.callout).foregroundStyle(.secondary)
+                            if installer.needsApproval {
+                                Button("Open System Settings", action: installer.openSettings)
+                            }
+                        }
+                        if installer.needsAppRestart {
+                            Button("Restart MovemberCam", action: restartAfterInstallation)
+                                .disabled(model.isBusy || location.isMoving)
+                        }
+                        Text("After installing or updating the virtual camera, quit Zoom completely and reopen it so MovemberCam appears in its camera list.")
+                            .font(.callout)
+                        Text("Start your camera using the button above. In Zoom, open Settings → Video & effects → Camera and select MovemberCam.")
+                            .font(.callout)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
                 GroupBox("Updates") {
@@ -184,5 +207,12 @@ struct MainWindow: View {
             }.padding(24)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private func restartAfterInstallation() {
+        let wasCapturing = model.isRunning
+        model.prepareForRestart {
+            location.restart(resumingCamera: wasCapturing)
+        }
     }
 }
