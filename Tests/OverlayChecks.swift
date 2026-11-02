@@ -45,15 +45,15 @@ enum OverlayChecks {
         var config = OverlayConfiguration(qrURL: "https://movember.com/m/example?utm_source=video",
                                           displayURL: "mo.example/fundraiser")
         let compositor = try FrameCompositor(configuration: config, logo: logo)
-        let pool = try VideoFormat.pool()
+        let pool = try VideoFormat.hd720.pool()
         var input: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &input)
         let camera = input!
         CVPixelBufferLockBaseAddress(camera, [])
-        for y in 0..<VideoFormat.height {
+        for y in 0..<VideoFormat.hd720.height {
             let row = CVPixelBufferGetBaseAddress(camera)!.advanced(by: y * CVPixelBufferGetBytesPerRow(camera))
                 .assumingMemoryBound(to: UInt32.self)
-            for x in 0..<VideoFormat.width { row[x] = x < 640 ? 0xFFFF0000 : 0xFF0000FF }
+            for x in 0..<VideoFormat.hd720.width { row[x] = x < 640 ? 0xFFFF0000 : 0xFF0000FF }
         }
         CVPixelBufferUnlockBaseAddress(camera, [])
 
@@ -132,7 +132,66 @@ enum OverlayChecks {
                   "Old homepage defaults migrate to the musta-ch fundraiser")
         try check(OverlayPreferences.load(from: reopened) == OverlayConfiguration(),
                   "Migrated defaults are saved to preferences")
+        try checkResolutions(logo: logo, time: time, root: root)
         print("\n\(checks) checks passed. Render: build/verification/overlay.png")
+    }
+
+    static func checkResolutions(logo: CGImage?, time: CMTime, root: String) throws {
+        let config = OverlayConfiguration()
+        let compositor = try FrameCompositor(configuration: config, logo: logo)
+        // Reuse one compositor to exercise changes both up and down, as when switching cameras.
+        let sizes = [VideoFormat(width: 1920, height: 1080), VideoFormat(width: 2560, height: 1440),
+                     VideoFormat(width: 3840, height: 2160), VideoFormat(width: 1600, height: 1200),
+                     VideoFormat(width: 2304, height: 1296), VideoFormat(width: 640, height: 480),
+                     VideoFormat(width: 640, height: 360), .hd720]
+        for format in sizes {
+            let pool = try format.pool()
+            var buffer: CVPixelBuffer?
+            CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer)
+            let camera = buffer!
+            CVPixelBufferLockBaseAddress(camera, [])
+            for y in 0..<format.height {
+                let row = CVPixelBufferGetBaseAddress(camera)!.advanced(by: y * CVPixelBufferGetBytesPerRow(camera))
+                    .assumingMemoryBound(to: UInt32.self)
+                for x in 0..<format.width { row[x] = x < format.width / 2 ? 0xFFFF0000 : 0xFF0000FF }
+            }
+            CVPixelBufferUnlockBaseAddress(camera, [])
+            for corner in OverlayConfiguration.Corner.allCases {
+                var settings = config
+                settings.corner = corner
+                settings.mirrorCamera = true
+                try compositor.configure(settings)
+                let sample = try compositor.render(camera, at: time)
+                let image = compositor.preview(sample)!
+                let label = "\(format.width) × \(format.height), \(corner.rawValue)"
+                try check(image.width == format.width && image.height == format.height, "Auto preserves input size: \(label)")
+                let described = CMVideoFormatDescriptionGetDimensions(sample.formatDescription!)
+                try check(Int(described.width) == format.width && Int(described.height) == format.height,
+                          "Sample description matches its pixels: \(label)")
+                try check(try codes(image) == [config.qrURL], "QR decodes at native resolution: \(label)")
+                if corner == .right && [1920, 1600].contains(format.width) {
+                    try NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!
+                        .write(to: URL(fileURLWithPath: root + "/build/verification/overlay-\(format.width)x\(format.height).png"))
+                }
+                let left = pixel(sample, x: format.width / 3, y: format.height / 2)
+                let right = pixel(sample, x: format.width * 2 / 3, y: format.height / 2)
+                try check(left.b > 240 && right.r > 240, "Mirroring survives a resolution change: \(label)")
+                let renderer = try VideoFrameRenderer(format: .hd720)
+                let downscaled = try renderer.render(sample.imageBuffer, at: time)
+                let output = CIContext().createCGImage(CIImage(cvPixelBuffer: downscaled.imageBuffer!),
+                    from: CGRect(x: 0, y: 0, width: 1280, height: 720))!
+                try check(try codes(output) == [config.qrURL], "Meeting-app conversion keeps QR visible: \(label)")
+                try check(CMTimeCompare(downscaled.presentationTimeStamp, time) == 0, "Conversion preserves timing: \(label)")
+                let sameSize = try VideoFrameRenderer(format: format).render(sample.imageBuffer, at: time)
+                try check(sameSize.imageBuffer === sample.imageBuffer, "Matching output reuses the camera pixels: \(label)")
+            }
+        }
+        let renderer = try VideoFrameRenderer(format: VideoFormat(width: 1920, height: 1080))
+        let idle = try renderer.render(nil, at: time)
+        try check(VideoFormat(idle.imageBuffer!) == renderer.format, "Stopped camera clears at the negotiated resolution")
+        let image = CIContext().createCGImage(CIImage(cvPixelBuffer: idle.imageBuffer!),
+            from: CGRect(x: 0, y: 0, width: 1920, height: 1080))!
+        try check(try codes(image).isEmpty, "Idle extension output contains no fundraising overlay")
     }
 
     static func main() {

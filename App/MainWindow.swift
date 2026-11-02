@@ -148,13 +148,15 @@ struct MainWindow: View {
                             .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
-                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .aspectRatio(model.previewFormat.aspectRatio, contentMode: .fit)
                 .accessibilityLabel("Camera preview with fundraising overlay")
 
                 HStack {
                     Text(model.outputStatus)
                     Spacer()
-                    Text("1280 × 720 · Up to 30 fps").foregroundStyle(.secondary)
+                    Text(model.isRunning
+                         ? "Auto · \(model.previewFormat.width) × \(model.previewFormat.height) · Up to 30 fps"
+                         : "Auto resolution · Up to 30 fps").foregroundStyle(.secondary)
                 }.font(.caption)
 
                 if let error = model.error {

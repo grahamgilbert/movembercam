@@ -24,7 +24,7 @@ You can place the QR card at the bottom left or right and mirror the camera imag
 
 Use the mustache menu bar icon to open Settings, toggle the overlay, start or stop the camera, or quit. Turning off the overlay leaves the camera running. Closing Settings also leaves the app running; use **Stop Camera** or quit to release the camera.
 
-MovemberCam supports built-in, USB, and Continuity cameras, with 720p output at up to 30 fps. Zoom may mirror the text in your self-view, but other participants receive the readable overlay. Audio uses the microphone selected in your meeting app.
+MovemberCam supports built-in, USB, and Continuity cameras. Auto resolution chooses the camera's highest resolution up to 4K at 30 fps, or its nearest available frame rate. The preview shows the actual capture dimensions. The virtual camera matches common camera resolutions, including 720p, 1080p, 1440p, and 4K; your meeting app can request a different output size. Zoom may mirror the text in your self-view, but other participants receive the readable overlay. Audio uses the microphone selected in your meeting app.
 
 Settings also has **Open at Login**, automatic update preferences, and **Check for Updates…**. Launching the app, including at login, does not start the camera.
 

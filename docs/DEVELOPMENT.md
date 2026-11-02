@@ -83,7 +83,7 @@ python3 -m unittest discover -s Tests/Signing -v
 bash Scripts/verify.sh
 ```
 
-The checks cover settings validation and persistence, signing, and video composition. Video checks render synthetic frames with the production compositor, decode the QR code at 720p and 360p using Vision, recognize the written URL, and verify mirroring and overlay bypass. The sample frame is saved to `build/verification/overlay.png`.
+The checks cover settings validation and persistence, signing, capture-mode selection, and video composition. Video checks render synthetic frames with the production compositor, decode the QR code at 720p and 360p using Vision, recognize the written URL, and verify mirroring and overlay bypass. They also switch between 1080p, 1440p, 4K, 4:3, and a nonstandard camera resolution, checking both overlay positions, sample format descriptions, and conversion to a meeting-app resolution. Sample frames are saved in `build/verification/`. Synthetic camera-extension checks exercise the real property handlers for default resolution, meeting negotiation, camera switching, and invalid format changes without installing the extension or opening a camera.
 
 End-to-end testing requires an installed, approved camera extension and two participants or devices. In a call, scan the received QR code, check the written URL and logo, toggle the overlay, and switch physical cameras. Confirm that stopping capture or quitting the app clears the feed.
 
@@ -98,7 +98,11 @@ End-to-end testing requires an installed, approved camera extension and two part
 
 The preview displays the same composited video through `AVSampleBufferDisplayLayer`. Virtual-camera discovery and delivery run on a separate worker queue. Both the preview and virtual output retain only the newest pending frame, dropping older frames to prevent growing latency.
 
-Output is 1280 × 720 at up to 30 fps. Switching cameras during capture stops the old source and resumes with the new one. The extension sends an empty dark frame when capture stops or no fresh frame arrives for half a second. Audio stays with the microphone selected in the meeting app.
+Auto resolution selects the largest camera video mode up to 3840 × 2160 that supports 30 fps. If no mode supports exactly 30 fps, it prefers the nearest supported rate, then resolution. Capture output is capped at 30 fps. The compositor reads the actual incoming frame dimensions, rebuilds its buffers and overlay when they change, and preserves the camera's aspect ratio. Overlay dimensions and margins scale proportionally; QR modules stay aligned to whole output pixels.
+
+The extension advertises a fixed list of common 16:9 and 4:3 formats through 4K. Before starting the sink, the app reads the installed extension's formats and selects an exact resolution match where available, otherwise the closest aspect ratio without increasing resolution when possible. This also permits a new app to feed an older 720p extension. The source defaults to the sink's resolution while no meeting is using it. Once a meeting selects a source format, the extension keeps that output size when cameras change and scales frames as needed. Aspect-ratio conversions add borders to retain the whole QR card and branding. Updating the extension and reopening the meeting app is required to expose the new formats to an existing installation.
+
+Switching cameras during capture stops the old source and resumes with the new one. The extension sends an empty dark frame at the negotiated output resolution when capture stops or no fresh frame arrives for half a second. Audio stays with the microphone selected in the meeting app.
 
 Overlay settings are stored locally in macOS preferences. **Apply Changes** saves the URLs, QR position, and mirroring; unapplied edits are discarded when the app quits. Camera selection and the menu bar overlay toggle save immediately. Opening Settings brings the existing window forward.
 
