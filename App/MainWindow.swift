@@ -7,29 +7,37 @@ struct MainWindow: View {
     @ObservedObject var loginItem: LoginItemManager
     @ObservedObject var location: AppLocationManager
     @ObservedObject var updater: AppUpdater
+    @ObservedObject var attention: CameraAttentionController
 
     var body: some View {
-        HSplitView {
-            settings
-                .frame(minWidth: 400, idealWidth: 460, maxWidth: 520)
-            preview
-                .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 0) {
+            if let issue = attention.issue {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(issue.title).font(.headline)
+                        Text(issue.message).font(.callout).textSelection(.enabled)
+                        if attention.notificationsAvailable == false {
+                            Text("Notifications are off. Camera warnings remain in the menu bar.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button(issue.recovery.title, action: attention.recover)
+                        .disabled(!attention.canRecover)
+                }.padding(16).background(Color.orange.opacity(0.1))
+                Divider()
+            }
+            HSplitView {
+                settings
+                    .frame(minWidth: 400, idealWidth: 460, maxWidth: 520)
+                preview
+                    .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(minWidth: 1160, minHeight: 920)
         .background(NativeWindowStyle(minimumContentSize: CGSize(width: 1160, height: 920)))
-        .onAppear {
-            location.checkLocation()
-            installer.prepareForActivation = model.prepareForExtensionUpdate
-            installer.captureSuspensionChanged = model.setCaptureSuspended
-            model.setCaptureSuspended(installer.blocksCapture)
-            installer.refreshCamera = model.refreshCameras
-            installer.checkForUpgrade()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            model.refreshCameras()
-            if installer.state == .awaitingApproval || installer.state == .disabled { installer.refresh() }
-        }
-        .onReceive(model.$virtualCameraStatus) { installer.observeCameraStatus($0) }
+        .onAppear { location.checkLocation() }
         .alert("Move MovemberCam to Applications?", isPresented: $location.isOfferingMove) {
             Button("Move to Applications and Restart", action: location.moveAndRestart)
             Button("Quit", role: .cancel) { NSApp.terminate(nil) }
@@ -147,8 +155,7 @@ struct MainWindow: View {
                 .accessibilityLabel("Camera preview with fundraising overlay")
 
                 HStack {
-                    Text(installer.busy ? "Updating virtual camera…" :
-                        installer.state == .unavailable ? "Restart MovemberCam to reconnect" : model.outputStatus)
+                    Text(installer.state.connectionSummary ?? model.outputStatus)
                     Spacer()
                     Text(model.isRunning
                          ? "Auto · \(model.previewFormat.width) × \(model.previewFormat.height) · Up to 30 fps"
@@ -188,8 +195,12 @@ struct MainWindow: View {
                     .foregroundStyle(.green)
             } else {
                 HStack(alignment: .top, spacing: 8) {
-                    if installer.busy { ProgressView().controlSize(.small) }
+                    if installer.showsProgress { ProgressView().controlSize(.small) }
                     Text(installer.message).font(.callout).textSelection(.enabled)
+                }
+                if installer.offersStatusCheck && location.isInApplications {
+                    Button(installer.isCheckingStatus ? "Checking Status…" : "Recheck Camera Status", action: installer.refresh)
+                        .disabled(installer.isCheckingStatus)
                 }
                 if let title = installer.recoveryAction.title, location.isInApplications {
                     Button(title, action: recoverExtension)

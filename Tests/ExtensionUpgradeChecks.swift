@@ -14,7 +14,16 @@ import SystemExtensions
         var paused = false
         var suspensions: [Bool] = []
         let defaults: UserDefaults
-        init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+        private let suite: String?
+        init(defaults: UserDefaults? = nil) {
+            if let defaults { self.defaults = defaults; suite = nil }
+            else {
+                let suite = "MovemberCam.upgrade-harness.\(UUID().uuidString)"
+                self.suite = suite
+                self.defaults = UserDefaults(suiteName: suite)!
+            }
+        }
+        deinit { if let suite { defaults.removePersistentDomain(forName: suite) } }
         lazy var installer: ExtensionInstaller = {
             let value = ExtensionInstaller(bundledVersion: CameraExtensionVersion(release: "1.0.3", build: "10"),
                 canInstall: true, submit: { [unowned self] in self.requests.append($0) },
@@ -98,10 +107,136 @@ import SystemExtensions
         try check(recovery.installer.recoveryAction == .restartApp, "Unavailable camera offers one app-restart action")
         recovery.installer.noteAppRestart()
         try check(recovery.installer.recoveryAction == .openSettings, "A previous app restart advances to one settings action")
+        try check(!recovery.installer.needsApproval && recovery.installer.message.contains("already enabled"),
+                  "A failed connection after restart does not falsely claim camera permission is disabled")
         recovery.installer.observeCameraStatus(.idle(isInstalled: true))
         try check(recovery.installer.isReady && recovery.requests.count == 2,
                   "Late camera discovery clears recovery guidance without another activation")
+        try checkApprovalRecovery()
         print("\(checks) extension upgrade checks passed")
+    }
+
+    static func entry(_ build: String = "10", enabled: Bool = true, approval: Bool = false) -> InstalledCameraExtension {
+        InstalledCameraExtension(version: CameraExtensionVersion(release: "1.0.3", build: build),
+            isEnabled: enabled, isAwaitingApproval: approval, isUninstalling: false)
+    }
+
+    static func pendingApproval() -> Harness {
+        let harness = Harness()
+        harness.installer.install()
+        harness.installer.requestNeedsUserApproval(harness.requests[0])
+        return harness
+    }
+
+    static func checkApprovalRecovery() throws {
+        let approved = pendingApproval()
+        let activation = approved.requests[0]
+        try check(approved.installer.offersStatusCheck && !approved.installer.showsProgress,
+                  "Approval waits show camera-specific guidance and a status check instead of an installation spinner")
+        approved.installer.refresh()
+        try check(approved.requests.count == 2 && approved.installer.isCheckingStatus,
+                  "Returning from Settings can query approval while the activation request is still pending")
+        approved.installer.refresh()
+        approved.installer.install()
+        approved.installer.uninstall()
+        try check(approved.requests.count == 2, "Status rechecks are serialized and never duplicate pending changes")
+        approved.installer.receiveInstalled([entry()], for: approved.requests[1])
+        try check(approved.installer.state == .awaitingActivation && !approved.installer.needsApproval &&
+                  approved.installer.message.contains("is enabled"), "Enabled permission is distinguished from unfinished activation")
+        approved.installer.observeCameraStatus(.sending)
+        try check(!approved.installer.isReady, "An older visible device cannot finish a still-pending activation")
+        approved.installer.refresh()
+        approved.installer.receiveInstalled([entry()], for: approved.requests.last!)
+        try check(approved.installer.state == .awaitingActivation,
+                  "Repeated enabled snapshots remain in connection verification without requesting approval again")
+        approved.drain()
+        try check(approved.installer.state == .unavailable && approved.installer.recoveryEnabled &&
+                  approved.installer.recoveryAction == .restartApp && approved.installer.message.contains("is enabled"),
+                  "A missing completion offers restart recovery after a bounded wait, even with a pending request")
+        approved.installer.install()
+        try check(approved.requests.count == 3, "A stalled pending activation still blocks duplicate installation")
+        approved.installer.request(activation, didFinishWithResult: .completed)
+        approved.installer.observeCameraStatus(.sending)
+        try check(approved.installer.isReady, "The original activation can still complete after status reconciliation")
+
+        let waiting = pendingApproval()
+        waiting.installer.refresh()
+        waiting.installer.receiveInstalled([entry("9"), entry(enabled: false, approval: true)], for: waiting.requests.last!)
+        try check(waiting.installer.state == .awaitingApproval && !waiting.installer.showsProgress,
+                  "A genuine pending approval remains actionable without a false busy spinner")
+        waiting.installer.refresh()
+        waiting.installer.receiveInstalled([entry(enabled: false)], for: waiting.requests.last!)
+        try check(waiting.installer.state == .disabled && waiting.installer.recoveryEnabled,
+                  "An explicit disabled snapshot presents enable guidance while preserving the activation request")
+
+        let older = pendingApproval()
+        older.installer.refresh()
+        older.installer.receiveInstalled([entry("9")], for: older.requests.last!)
+        try check(older.installer.state == .awaitingApproval, "Approval of an older version cannot approve the requested update")
+
+        let failure = pendingApproval()
+        failure.installer.refresh()
+        failure.installer.request(failure.requests.last!, didFailWithError: NSError(domain: "StatusCheck", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Controlled status query failure"]))
+        try check(failure.installer.state == .awaitingApproval && failure.installer.busy &&
+                  failure.installer.message.contains("Controlled status query failure") && !failure.installer.isCheckingStatus,
+                  "A read-only status failure is visible and leaves the pending activation alive")
+        failure.installer.refresh()
+        try check(failure.installer.statusCheckError == nil, "A status retry clears the previous inspection error")
+        failure.installer.request(failure.requests[0], didFinishWithResult: .completed)
+        failure.installer.observeCameraStatus(.sending)
+        let lateQuery = failure.requests.last!
+        failure.installer.receiveInstalled([entry(enabled: false, approval: true)], for: lateQuery)
+        try check(failure.installer.isReady && !failure.installer.isCheckingStatus,
+                  "A late approval snapshot cannot overwrite successful activation")
+
+        let lateFailure = pendingApproval()
+        lateFailure.installer.refresh()
+        let query = lateFailure.requests.last!
+        lateFailure.installer.request(lateFailure.requests[0], didFinishWithResult: .completed)
+        lateFailure.installer.observeCameraStatus(.sending)
+        lateFailure.installer.request(query, didFailWithError: NSError(domain: "StatusCheck", code: 2))
+        try check(lateFailure.installer.isReady && lateFailure.installer.statusCheckError == nil,
+                  "A late inspection error cannot replace a successful connection")
+
+        let reboot = pendingApproval()
+        reboot.installer.refresh()
+        reboot.installer.receiveInstalled([entry()], for: reboot.requests.last!)
+        reboot.installer.request(reboot.requests[0], didFinishWithResult: .willCompleteAfterReboot)
+        reboot.drain()
+        try check(reboot.installer.state == .restartRequired, "Activation wait callbacks cannot override a required Mac restart")
+
+        let restored = Harness()
+        restored.installer.inspect([entry(enabled: false, approval: true)])
+        restored.installer.install()
+        try check(restored.requests.isEmpty && restored.installer.busy && !restored.installer.showsProgress,
+                  "Approval pending across an app restart still blocks duplicate installation without a spinner")
+        restored.installer.refresh()
+        restored.installer.request(restored.requests.last!, didFailWithError: NSError(domain: "StatusCheck", code: 3,
+            userInfo: [NSLocalizedDescriptionKey: "Restored approval check failed"]))
+        try check(restored.installer.state == .awaitingApproval && restored.installer.message.contains("Restored approval check failed"),
+                  "Failed status rechecks preserve an approval state learned from macOS")
+        restored.installer.refresh()
+        restored.installer.receiveInstalled([entry()], for: restored.requests.last!)
+        restored.installer.observeCameraStatus(.sending)
+        try check(restored.installer.isReady, "An app restarted during approval can reconcile an enabled camera without a new activation")
+
+        let unresponsive = pendingApproval()
+        unresponsive.installer.refresh()
+        let timedOutQuery = unresponsive.requests.last!
+        unresponsive.drain()
+        try check(unresponsive.installer.state == .awaitingApproval && !unresponsive.installer.isCheckingStatus &&
+                  unresponsive.installer.message.contains("did not respond"),
+                  "An unanswered status query stops checking after a bounded wait and preserves approval recovery")
+        unresponsive.installer.refresh()
+        let retryQuery = unresponsive.requests.last!
+        unresponsive.installer.receiveInstalled([entry()], for: timedOutQuery)
+        try check(unresponsive.installer.state == .awaitingApproval && unresponsive.installer.isCheckingStatus,
+                  "A timed-out status response cannot overwrite a newer query")
+        unresponsive.installer.receiveInstalled([entry()], for: retryQuery)
+        unresponsive.installer.request(unresponsive.requests[0], didFinishWithResult: .completed)
+        unresponsive.installer.observeCameraStatus(.sending)
+        try check(unresponsive.installer.isReady, "The original activation still completes after an inspection timeout")
     }
     static func main() {
         do { try run() } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }

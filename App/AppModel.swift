@@ -17,6 +17,7 @@ final class AppModel: ObservableObject {
     @Published var isBusy = false
     @Published var isApplying = false
     @Published var error: String?
+    @Published private(set) var cameraFailure: String?
     @Published var cameraDenied = false
     @Published var isOverlayEnabled = true {
         didSet {
@@ -70,12 +71,13 @@ final class AppModel: ObservableObject {
                 Task { @MainActor in
                     guard let self, !self.demand.isSuspended, !self.isShuttingDown else { return }
                     self.error = message
+                    self.cameraFailure = message
                     self.demand.hasFailed = true
                     self.stop()
                 }
             }
             engine.showPlaceholder()
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = error.localizedDescription; self.cameraFailure = error.localizedDescription }
         refreshCameras()
         cameraObservation = CameraEngine.discoverySession.observe(\.devices, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in self?.refreshCameras() }
@@ -200,6 +202,7 @@ final class AppModel: ObservableObject {
     private func start() {
         guard demand.shouldCapture, !isBusy, !isRunning, !selectedCameraID.isEmpty, engine != nil else { return }
         error = nil
+        cameraFailure = nil
         isBusy = true
         let token = UUID()
         generation = token
@@ -231,6 +234,7 @@ final class AppModel: ObservableObject {
                     self.isBusy = false
                     self.isRunning = error == nil
                     self.error = error?.localizedDescription
+                    self.cameraFailure = error?.localizedDescription
                     self.demand.hasFailed = error != nil
                     if error == nil { self.defaults.set(cameraID, forKey: "MovemberCam.cameraID") }
                     self.reconcileCapture()

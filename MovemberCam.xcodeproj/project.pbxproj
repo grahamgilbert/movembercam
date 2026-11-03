@@ -22,7 +22,10 @@
 		4ABA5943373530BDBE5D489E /* VideoFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */; };
 		4EFB6E8947D32DE8A3F34BDE /* OverlayPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EBC475B567C7580AF13A9EF /* OverlayPreferences.swift */; };
 		4FDD0AC0C586888EE7F84276 /* OverlayConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */; };
+		554C92EB6D18226EA7E0670A /* CameraIssueNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34325D4C7890805D54AEF74D /* CameraIssueNotifications.swift */; };
+		66AFD3E5C4445E2C05C5B37B /* CameraAttentionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF92920ADE2B0D37F64D8B8 /* CameraAttentionController.swift */; };
 		70F16E9B31AA844BFBAD1D29 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = EB42B1B72F614C435D96C3E7 /* Sparkle */; };
+		76561ACED29EAE6F444A9FCE /* CameraAttention.swift in Sources */ = {isa = PBXBuildFile; fileRef = B520920B3151E3332153935E /* CameraAttention.swift */; };
 		82E39BF3301A0E159611EB7A /* MovemberCamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */; };
 		86578AFE6B2FF13A7E7878BE /* MovemberMo.png in Resources */ = {isa = PBXBuildFile; fileRef = 1F045AEE9387865A1F981525 /* MovemberMo.png */; };
 		8D227B249CF452A943334EDC /* LaunchBehavior.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61BE00CF049F677574C97229 /* LaunchBehavior.swift */; };
@@ -72,10 +75,12 @@
 		24046F348AC2E826529C055D /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
 		249F49C705C2C07DF6C22D85 /* MovemberCam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MovemberCam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		28FAF60DA208F3A090C4C457 /* MovemberCamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovemberCamApp.swift; sourceTree = "<group>"; };
+		34325D4C7890805D54AEF74D /* CameraIssueNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraIssueNotifications.swift; sourceTree = "<group>"; };
 		546EA57C251676D9C922680C /* ExtensionInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionInstaller.swift; sourceTree = "<group>"; };
 		61BE00CF049F677574C97229 /* LaunchBehavior.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchBehavior.swift; sourceTree = "<group>"; };
 		679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocationManager.swift; sourceTree = "<group>"; };
 		6C4C7880D319B26CCD9B3706 /* SampleBufferPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleBufferPreview.swift; sourceTree = "<group>"; };
+		6CF92920ADE2B0D37F64D8B8 /* CameraAttentionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAttentionController.swift; sourceTree = "<group>"; };
 		73FBEC0885ED935C10A03585 /* CameraExtensionUpgrade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraExtensionUpgrade.swift; sourceTree = "<group>"; };
 		7F13C21FBB13B49BB0E3490C /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		8E0577CF381EA23F673578BC /* CameraControlState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraControlState.swift; sourceTree = "<group>"; };
@@ -83,6 +88,7 @@
 		A1AF005CC2E616FC336E66D1 /* UpdateChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChannel.swift; sourceTree = "<group>"; };
 		AA1319C3F671CEA92C9CDA7E /* NativeWindowStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWindowStyle.swift; sourceTree = "<group>"; };
 		AAA9897C658157DABE9482AB /* VirtualCameraStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualCameraStatus.swift; sourceTree = "<group>"; };
+		B520920B3151E3332153935E /* CameraAttention.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAttention.swift; sourceTree = "<group>"; };
 		B732EC36E9A7ACED89DB7F16 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormat.swift; sourceTree = "<group>"; };
 		CD8457C9AC1CAD1014E0D8C0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -117,6 +123,7 @@
 		27B174041F6714FB8BD46178 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				B520920B3151E3332153935E /* CameraAttention.swift */,
 				8E0577CF381EA23F673578BC /* CameraControlState.swift */,
 				73FBEC0885ED935C10A03585 /* CameraExtensionUpgrade.swift */,
 				0306749076198B08ABD9D2B9 /* FrameCompositor.swift */,
@@ -175,7 +182,9 @@
 				679C4F8D0E441FF21DA0F75C /* AppLocationManager.swift */,
 				7F13C21FBB13B49BB0E3490C /* AppModel.swift */,
 				0EDD83F43AF123C8D5EB589B /* AppUpdater.swift */,
+				6CF92920ADE2B0D37F64D8B8 /* CameraAttentionController.swift */,
 				F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */,
+				34325D4C7890805D54AEF74D /* CameraIssueNotifications.swift */,
 				546EA57C251676D9C922680C /* ExtensionInstaller.swift */,
 				24046F348AC2E826529C055D /* LoginItemManager.swift */,
 				E54B8440F130F94398D46C7E /* MainWindow.swift */,
@@ -300,9 +309,12 @@
 				0B3E4D97849D058D934B2282 /* AppLocationManager.swift in Sources */,
 				3C4E511C1656D3F468277231 /* AppModel.swift in Sources */,
 				D80506501ED8AA36DB5903B7 /* AppUpdater.swift in Sources */,
+				76561ACED29EAE6F444A9FCE /* CameraAttention.swift in Sources */,
+				66AFD3E5C4445E2C05C5B37B /* CameraAttentionController.swift in Sources */,
 				A0C8E1D13E548BA75E82F66C /* CameraControlState.swift in Sources */,
 				DD0231E821DF2FA817CA0F7D /* CameraEngine.swift in Sources */,
 				27C0501A02C4655D6DD16341 /* CameraExtensionUpgrade.swift in Sources */,
+				554C92EB6D18226EA7E0670A /* CameraIssueNotifications.swift in Sources */,
 				329D510D69EC0C40668CC26D /* ExtensionInstaller.swift in Sources */,
 				4A4EF93B58F61B0DC71FA6DA /* FrameCompositor.swift in Sources */,
 				8D227B249CF452A943334EDC /* LaunchBehavior.swift in Sources */,
