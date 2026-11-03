@@ -9,8 +9,8 @@ struct MainWindow: View {
     @ObservedObject var updater: AppUpdater
     @ObservedObject var attention: CameraAttentionController
 
-    enum SettingsTab { case camera, overlay, app }
-    @State var selectedTab = SettingsTab.camera
+    enum SettingsTab: String { case camera, overlay, app }
+    @AppStorage("MovemberCam.settingsTab") var selectedTab = SettingsTab.camera
 
     var body: some View {
         VStack(spacing: 0) {

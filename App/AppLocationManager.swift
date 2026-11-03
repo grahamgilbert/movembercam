@@ -35,7 +35,7 @@ final class AppLocationManager: ObservableObject {
                     try FileManager.default.trashItem(at: destination, resultingItemURL: nil)
                 }
                 try FileManager.default.moveItem(at: staging, to: destination)
-                await relaunch(at: destination)
+                relaunch(at: destination)
             } catch {
                 if FileManager.default.fileExists(atPath: staging.path) {
                     try? FileManager.default.trashItem(at: staging, resultingItemURL: nil)
@@ -46,18 +46,25 @@ final class AppLocationManager: ObservableObject {
         }
     }
 
-    func restart() {
-        guard !isMoving else { return }
+    @discardableResult
+    func restart() -> Bool { restart(showSettings: true, activates: true, cameraRecovery: false) }
+
+    func restart(showSettings: Bool, activates: Bool, cameraRecovery: Bool) -> Bool {
+        guard !isMoving else { return false }
         isMoving = true
-        Task { await relaunch(at: Bundle.main.bundleURL) }
+        return relaunch(at: Bundle.main.bundleURL, showSettings: showSettings,
+                        activates: activates, cameraRecovery: cameraRecovery)
     }
 
-    private func relaunch(at url: URL) async {
+    @discardableResult
+    private func relaunch(at url: URL, showSettings: Bool = true, activates: Bool = true,
+                          cameraRecovery: Bool = false) -> Bool {
         do {
             let relaunch = Process()
             relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
             relaunch.arguments = LaunchBehavior.relaunchArguments(processID: ProcessInfo.processInfo.processIdentifier,
-                applicationPath: url.path)
+                applicationPath: url.path, showSettings: showSettings,
+                activates: activates, cameraRecovery: cameraRecovery)
             relaunch.standardInput = FileHandle.nullDevice
             relaunch.standardOutput = FileHandle.nullDevice
             relaunch.standardError = FileHandle.nullDevice
@@ -66,9 +73,11 @@ final class AppLocationManager: ObservableObject {
             RunLoop.main.perform(inModes: [.common]) {
                 MainActor.assumeIsolated { NSApp.terminate(nil) }
             }
+            return true
         } catch {
             self.error = "Couldn’t reopen MovemberCam: \(error.localizedDescription) Open it from Applications to continue."
             isMoving = false
+            return false
         }
     }
 }

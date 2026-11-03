@@ -26,6 +26,8 @@ Use the mustache menu bar icon to open Settings, toggle the overlay, or quit. Th
 
 MovemberCam supports built-in, USB, and Continuity cameras. Built-in cameras use macOS’s normal high-quality video feed. For other cameras, Auto resolution chooses the highest resolution up to 4K at 30 fps, or the nearest available frame rate. The preview shows the actual capture dimensions. The virtual camera matches common camera resolutions, including 720p, 1080p, 1440p, and 4K; your meeting app can request a different output size. Zoom may mirror the text in your self-view, but other participants receive the readable overlay. Audio uses the microphone selected in your meeting app.
 
+After a camera extension update, MovemberCam retries connecting automatically. If macOS leaves only the app’s camera discovery stuck, it can briefly reopen itself once to finish recovery, preserving your edits and keeping Settings closed if it was closed. If recovery still fails, the menu bar warning and notification provide the next action.
+
 Settings also has **Open at Login**, automatic update preferences, and **Check for Updates…**. Opening Settings starts the camera for its preview. Launching at login keeps Settings hidden and leaves the camera off until a video app uses MovemberCam.
 
 To remove the virtual camera, close apps using MovemberCam and choose **Camera → Remove Virtual Camera**.

@@ -23,6 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 location.restart()
             }
         }
+        installer.restartForStaleDiscovery = { [weak self, weak model, weak location] in
+            guard let self, let model, let location, !model.isBusy, !location.isMoving else { return false }
+            model.preserveDraftForRecovery()
+            let visible = self.settingsWindow?.isVisible == true &&
+                self.settingsWindow?.isMiniaturized == false && !NSApp.isHidden
+            return location.restart(showSettings: visible, activates: NSRunningApplication.current.isActive,
+                                    cameraRecovery: true)
+        }
         shutdown = { completion in
             attention.prepareForTermination()
             model.shutdown(completion: completion)
@@ -56,8 +64,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         RunLoop.main.perform(inModes: [.common]) {
             MainActor.assumeIsolated {
                 self.finishedLaunching = true
-                if atLogin { self.settingsWindow?.orderOut(nil) }
-                else { self.showSettingsWindow() }
+                let launch = LaunchBehavior(arguments: CommandLine.arguments, launchedAtLogin: atLogin)
+                if !launch.showSettings { self.settingsWindow?.orderOut(nil) }
+                else if CommandLine.arguments.contains("--background-recovery") {
+                    self.settingsWindow?.orderFront(nil)
+                } else { self.showSettingsWindow() }
                 self.updatePreviewVisibility()
             }
         }
@@ -101,6 +112,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+enum MovemberCamEntry {
+    static func main() {
+        if CommandLine.arguments.contains(CameraDiscoveryProbe.argument) {
+            exit(CameraDiscoveryProbe.isCameraAvailable() ? 0 : 4)
+        }
+        MovemberCamApp.main()
+    }
+}
+
 struct MovemberCamApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
@@ -165,7 +185,9 @@ struct MenuBarIcon: View {
                 handledRelaunch = true
                 if CommandLine.arguments.contains("--show-settings") {
                     openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
+                    if !CommandLine.arguments.contains("--background-recovery") {
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
                 }
             }
     }

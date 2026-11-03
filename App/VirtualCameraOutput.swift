@@ -13,6 +13,8 @@ final class VirtualCameraOutput {
     private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "VirtualOutput")
     private var health = VirtualCameraConnectionHealth()
     private var observedDevices: [CMIODeviceID] = []
+    private var loggedInitialDiscovery = false
+    private var lastDiscoveryFailure: OSStatus?
     private var supportsDemand = false
     private var lastFailureStage: String?
     private var queueIsFull = false
@@ -86,7 +88,8 @@ final class VirtualCameraOutput {
 
     private func refreshAvailabilityOnWorker(forceDemand: Bool = true) {
         let devices = matchingDeviceIDs()
-        if devices != observedDevices {
+        if !loggedInitialDiscovery || devices != observedDevices {
+            loggedInitialDiscovery = true
             Self.logger.notice("Discovery device count=\(devices.count, privacy: .public) ids=\(String(describing: devices), privacy: .public)")
             observedDevices = devices
             if device != 0 && !devices.contains(device) { stopOnWorker(preserveCapture: true) }
@@ -339,12 +342,26 @@ final class VirtualCameraOutput {
                            scope: Int = kCMIOObjectPropertyScopeGlobal) -> [CMIOObjectID] {
         var property = address(selector, scope: scope)
         var bytes: UInt32 = 0
-        guard CMIOObjectGetPropertyDataSize(object, &property, 0, nil, &bytes) == noErr, bytes > 0 else { return [] }
+        let sizeResult = CMIOObjectGetPropertyDataSize(object, &property, 0, nil, &bytes)
+        guard sizeResult == noErr else { logDiscoveryResult(sizeResult, object: object); return [] }
+        guard bytes > 0 else { logDiscoveryResult(noErr, object: object); return [] }
         var ids = [CMIOObjectID](repeating: 0, count: Int(bytes) / MemoryLayout<CMIOObjectID>.size)
         var used: UInt32 = 0
         let result = ids.withUnsafeMutableBytes { buffer in
             CMIOObjectGetPropertyData(object, &property, 0, nil, bytes, &used, buffer.baseAddress!)
         }
+        logDiscoveryResult(result, object: object)
         return result == noErr ? Array(ids.prefix(Int(used) / MemoryLayout<CMIOObjectID>.size)) : []
+    }
+
+    private func logDiscoveryResult(_ result: OSStatus, object: CMIOObjectID) {
+        guard object == CMIOObjectID(kCMIOObjectSystemObject) else { return }
+        if result != noErr, lastDiscoveryFailure != result {
+            Self.logger.error("Device discovery query failed code=\(result, privacy: .public)")
+            lastDiscoveryFailure = result
+        } else if result == noErr, lastDiscoveryFailure != nil {
+            Self.logger.notice("Device discovery query responding again")
+            lastDiscoveryFailure = nil
+        }
     }
 }

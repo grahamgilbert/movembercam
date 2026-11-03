@@ -2,6 +2,18 @@ import Foundation
 
 enum OverlayPreferences {
     static let key = "MovemberCam.overlay.v1"
+    private static let recoveryDraftKey = "MovemberCam.recoveryDraft.v1"
+
+    static func preserveDraft(_ draft: OverlayConfiguration, in defaults: UserDefaults) {
+        defaults.set(try? JSONEncoder().encode(draft), forKey: recoveryDraftKey)
+    }
+
+    static func takeRecoveryDraft(from defaults: UserDefaults, restoring: Bool) -> OverlayConfiguration? {
+        defer { defaults.removeObject(forKey: recoveryDraftKey) }
+        guard restoring, let data = defaults.data(forKey: recoveryDraftKey) else { return nil }
+        // Unsaved edits may be invalid; preserve them without applying them.
+        return try? JSONDecoder().decode(OverlayConfiguration.self, from: data)
+    }
 
     static func load(from defaults: UserDefaults = .standard) -> OverlayConfiguration {
         var configuration = defaults.data(forKey: key)
