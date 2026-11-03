@@ -10,7 +10,8 @@ case "${1:-preview}" in
   preview)
     # Preview build needs no Developer account. It cannot activate the system extension.
     xcodebuild -quiet -project MovemberCam.xcodeproj -scheme MovemberCam \
-      -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO MOVEMBER_PREVIEW_BUILD=YES build
+      -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO MOVEMBER_PREVIEW_BUILD=YES \
+      ENABLE_DEBUG_DYLIB=NO build
     # Locally sign executable code so Apple Silicon can launch the preview bundle.
     codesign --force --sign - build/Build/Products/Debug/MovemberCam.app/Contents/Library/SystemExtensions/*.systemextension
     codesign --force --sign - --entitlements Config/Preview.entitlements build/Build/Products/Debug/MovemberCam.app
