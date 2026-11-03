@@ -9,6 +9,7 @@ struct CameraChoice: Identifiable, Equatable {
 final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onPreview: (@MainActor (CMSampleBuffer) -> Void)?
     var onOutputStatus: ((VirtualCameraStatus) -> Void)?
+    var onDemand: ((Bool) -> Void)?
     var onFailure: ((String) -> Void)?
 
     private let session = AVCaptureSession()
@@ -30,6 +31,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         compositor = try FrameCompositor(configuration: configuration, logo: logo)
         super.init()
         virtualCamera.onStatus = { [weak self] status in self?.onOutputStatus?(status) }
+        virtualCamera.onDemand = { [weak self] needed in self?.onDemand?(needed) }
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionRuntimeError,
             object: session, queue: nil) { [weak self] notification in
                 let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error
@@ -37,7 +39,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
             })
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionWasInterrupted,
             object: session, queue: nil) { [weak self] _ in
-                self?.onFailure?("The camera was interrupted. Try starting it again.")
+                self?.onFailure?("The camera was interrupted. Reopen MovemberCam in your video app to try again.")
             })
     }
 
@@ -115,35 +117,36 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
                 }
                 self.session.addInput(input)
                 self.session.sessionPreset = .high
-                let modes = device.formats.map { format -> VideoFormat.CaptureMode in
-                    let size = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-                    return VideoFormat.CaptureMode(format: VideoFormat(width: Int(size.width), height: Int(size.height)),
-                        frameRateRanges: format.videoSupportedFrameRateRanges.map { $0.minFrameRate...$0.maxFrameRate })
+                // Built-in cameras have system-managed video framing. Let the high
+                // preset select their normal feed instead of ranking sensor shapes by area.
+                if device.deviceType != .builtInWideAngleCamera {
+                    let modes = device.formats.map { format -> VideoFormat.CaptureMode in
+                        let size = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                        return VideoFormat.CaptureMode(format: VideoFormat(width: Int(size.width), height: Int(size.height)),
+                            frameRateRanges: format.videoSupportedFrameRateRanges.map { $0.minFrameRate...$0.maxFrameRate })
+                    }
+                    guard let index = VideoFormat.preferredCaptureModeIndex(in: modes), let rate = modes[index].frameRate else {
+                        self.session.commitConfiguration()
+                        throw VideoError.message("This camera has no supported video mode up to 4K.")
+                    }
+                    do {
+                        try device.lockForConfiguration()
+                        defer { device.unlockForConfiguration() }
+                        device.activeFormat = device.formats[index]
+                        let range = device.activeFormat.videoSupportedFrameRateRanges.first {
+                            $0.minFrameRate <= rate && $0.maxFrameRate >= rate
+                        }!
+                        let duration = rate == range.maxFrameRate ? range.minFrameDuration
+                            : rate == range.minFrameRate ? range.maxFrameDuration : VideoFormat.duration
+                        device.activeVideoMinFrameDuration = duration
+                        device.activeVideoMaxFrameDuration = duration
+                    } catch {
+                        self.session.commitConfiguration()
+                        throw error
+                    }
                 }
-                guard let index = VideoFormat.preferredCaptureModeIndex(in: modes), let rate = modes[index].frameRate else {
-                    self.session.commitConfiguration()
-                    throw VideoError.message("This camera has no supported video mode up to 4K.")
-                }
-                do {
-                    try device.lockForConfiguration()
-                    defer { device.unlockForConfiguration() }
-                    device.activeFormat = device.formats[index]
-                    let range = device.activeFormat.videoSupportedFrameRateRanges.first {
-                        $0.minFrameRate <= rate && $0.maxFrameRate >= rate
-                    }!
-                    let duration = rate == range.maxFrameRate ? range.minFrameDuration
-                        : rate == range.minFrameRate ? range.maxFrameDuration : VideoFormat.duration
-                    device.activeVideoMinFrameDuration = duration
-                    device.activeVideoMaxFrameDuration = duration
-                } catch {
-                    self.session.commitConfiguration()
-                    throw error
-                }
-                self.output.videoSettings = [
-                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                    kCVPixelBufferWidthKey as String: modes[index].format.width,
-                    kCVPixelBufferHeightKey as String: modes[index].format.height
-                ]
+                // Preserve capture dimensions; request only the compositor's pixel format.
+                self.output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
                 self.output.alwaysDiscardsLateVideoFrames = true
                 self.output.setSampleBufferDelegate(self, queue: self.frameQueue)
                 guard self.session.canAddOutput(self.output) else {

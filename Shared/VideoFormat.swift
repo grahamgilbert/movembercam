@@ -1,6 +1,13 @@
 import CoreMedia
+import CoreMediaIO
 import CoreVideo
 import Foundation
+
+/// Read-only source demand, independent of the companion app's input stream.
+enum CameraStreamDemand {
+    static let property = CMIOExtensionProperty(rawValue: "4cc_mdem_glob_0000")
+    static let selector: UInt32 = 0x6d64656d
+}
 
 struct VideoFormat: Equatable, Hashable {
     let width: Int

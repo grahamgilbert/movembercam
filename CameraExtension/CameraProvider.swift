@@ -40,7 +40,14 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     private(set) var qrControlValue = ""
     private var latest: CVPixelBuffer?
     private var latestTime = -Double.infinity
-    private var sourceClients = 0
+    private var sourceClients = 0 {
+        didSet {
+            guard (sourceClients > 0) != (oldValue > 0) else { return }
+            source.stream.notifyPropertiesChanged([CameraStreamDemand.property:
+                CMIOExtensionPropertyState<AnyObject>(value: demandValue as NSString)])
+        }
+    }
+    var demandValue: String { sourceClients > 0 ? "1" : "0" }
     private var sinkClient: CMIOExtensionClient?
     private var sinkRunning = false
     private var consumePending = false
@@ -201,12 +208,18 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
         var properties: Set<CMIOExtensionProperty> = [.streamActiveFormatIndex, .streamFrameDuration]
         if direction == .sink {
             properties.formUnion([.streamSinkBufferQueueSize, .streamSinkBuffersRequiredForStartup, FrameQRCode.controlProperty])
+        } else {
+            properties.insert(CameraStreamDemand.property)
         }
         return properties
     }
 
     func streamProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionStreamProperties {
         let result = CMIOExtensionStreamProperties(dictionary: [:])
+        if direction == .source, properties.contains(CameraStreamDemand.property) {
+            result.setPropertyState(CMIOExtensionPropertyState<AnyObject>(value: owner.demandValue as NSString),
+                                    forProperty: CameraStreamDemand.property)
+        }
         if direction == .sink, properties.contains(FrameQRCode.controlProperty) {
             result.setPropertyState(CMIOExtensionPropertyState<AnyObject>(value: owner.qrControlValue as NSString),
                                     forProperty: FrameQRCode.controlProperty)
@@ -219,6 +232,9 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
     }
 
     func setStreamProperties(_ streamProperties: CMIOExtensionStreamProperties) throws {
+        guard streamProperties.propertiesDictionary[CameraStreamDemand.property] == nil else {
+            throw VideoError.message("Camera demand is read-only.")
+        }
         if let index = streamProperties.activeFormatIndex, !formats.indices.contains(index) {
             throw VideoError.message("Unsupported video format.")
         }

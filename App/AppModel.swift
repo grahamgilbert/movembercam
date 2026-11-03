@@ -21,22 +21,34 @@ final class AppModel: ObservableObject {
     @Published var isOverlayEnabled = true {
         didSet {
             engine?.setOverlayEnabled(isOverlayEnabled)
-            UserDefaults.standard.set(isOverlayEnabled, forKey: "MovemberCam.overlayEnabled")
+            defaults.set(isOverlayEnabled, forKey: "MovemberCam.overlayEnabled")
         }
     }
     private var engine: CameraEngine?
     private var observers: [NSObjectProtocol] = []
     private var cameraObservation: NSKeyValueObservation?
     private var generation = UUID()
+    private var demand = CameraCaptureDemand()
+    private var isShuttingDown = false
+    private var isStopping = false
+    private var stopCompletions: [() -> Void] = []
+    private let defaults: UserDefaults
+    private let cameraAuthorization: () -> AVAuthorizationStatus
+    private let requestCameraAccess: () async -> Bool
 
-    init() {
-        let stored = OverlayPreferences.load()
+    init(defaults: UserDefaults = .standard,
+         cameraAuthorization: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
+         requestCameraAccess: @escaping () async -> Bool = { await AVCaptureDevice.requestAccess(for: .video) }) {
+        self.defaults = defaults
+        self.cameraAuthorization = cameraAuthorization
+        self.requestCameraAccess = requestCameraAccess
+        let stored = OverlayPreferences.load(from: defaults)
         draft = stored
         applied = stored
         do {
             let engine = try CameraEngine(configuration: stored)
             self.engine = engine
-            isOverlayEnabled = UserDefaults.standard.object(forKey: "MovemberCam.overlayEnabled") as? Bool ?? true
+            isOverlayEnabled = defaults.object(forKey: "MovemberCam.overlayEnabled") as? Bool ?? true
             engine.setOverlayEnabled(isOverlayEnabled)
             engine.onPreview = { [weak self] sample in
                 guard let self else { return }
@@ -47,10 +59,18 @@ final class AppModel: ObservableObject {
                 self.previewFeed.sample = sample
             }
             engine.onOutputStatus = { [weak self] status in Task { @MainActor in self?.virtualCameraStatus = status } }
-            engine.onFailure = { [weak self] message in
+            engine.onDemand = { [weak self] needed in
                 Task { @MainActor in
                     guard let self else { return }
+                    self.demand.update(needed)
+                    self.reconcileCapture()
+                }
+            }
+            engine.onFailure = { [weak self] message in
+                Task { @MainActor in
+                    guard let self, !self.demand.isSuspended, !self.isShuttingDown else { return }
                     self.error = message
+                    self.demand.hasFailed = true
                     self.stop()
                 }
             }
@@ -60,7 +80,7 @@ final class AppModel: ObservableObject {
         cameraObservation = CameraEngine.discoverySession.observe(\.devices, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in self?.refreshCameras() }
         }
-        selectedCameraID = UserDefaults.standard.string(forKey: "MovemberCam.cameraID") ?? ""
+        selectedCameraID = defaults.string(forKey: "MovemberCam.cameraID") ?? ""
         if !cameras.contains(where: { $0.id == selectedCameraID }) { selectedCameraID = cameras.first?.id ?? "" }
         for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -72,27 +92,30 @@ final class AppModel: ObservableObject {
     var hasChanges: Bool { draft != applied }
     var cameraControls: CameraControlState {
         let permission: CameraControlState.Permission
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        switch cameraAuthorization() {
         case .authorized: permission = .allowed
         case .notDetermined: permission = .notRequested
         default: permission = .blocked
         }
-        return CameraControlState(permission: permission, isRunning: isRunning, isBusy: isBusy, hasCamera: !selectedCameraID.isEmpty)
+        return CameraControlState(permission: permission, isBusy: isBusy)
     }
 
     func performCameraAction() {
         switch cameraControls.action {
-        case .start: start()
-        case .stop: stop()
+        case nil: return
         case .openSettings: openCameraSettings()
         case .requestAccess:
             guard !isBusy else { return }
             isBusy = true
+            let token = UUID()
+            generation = token
             Task {
-                let authorized = await AVCaptureDevice.requestAccess(for: .video)
+                let authorized = await requestCameraAccess()
+                guard generation == token else { return }
                 cameraDenied = !authorized
                 error = authorized ? nil : "Allow MovemberCam in System Settings → Privacy & Security → Camera."
                 isBusy = false
+                demand.hasFailed = false
                 refreshCameras()
             }
         }
@@ -101,16 +124,32 @@ final class AppModel: ObservableObject {
         do { _ = try draft.validated(); return nil } catch { return error.localizedDescription }
     }
 
+    func retryCamera() {
+        demand.hasFailed = false
+        refreshCameras()
+    }
+
     func refreshCameras() {
+        if cameraDenied && cameraAuthorization() == .authorized {
+            cameraDenied = false
+            demand.hasFailed = false
+            error = nil
+        }
         cameras = CameraEngine.cameras()
         engine?.refreshVirtualCameraAvailability()
-        if !cameras.contains(where: { $0.id == selectedCameraID }) {
-            if isRunning || isBusy {
+        let availableID = cameras.contains(where: { $0.id == selectedCameraID })
+            ? selectedCameraID : cameras.first?.id ?? ""
+        if availableID != selectedCameraID {
+            let wasCapturing = isRunning || isBusy
+            selectedCameraID = availableID
+            demand.hasFailed = false
+            if wasCapturing {
                 stop()
-                error = "The selected camera disconnected. Choose a camera and start again."
+                error = availableID.isEmpty ? "The selected camera disconnected. Connect a camera to continue."
+                    : "The selected camera disconnected. Using the next available camera."
             }
-            selectedCameraID = cameras.first?.id ?? ""
         }
+        reconcileCapture()
     }
 
     func apply() {
@@ -125,7 +164,7 @@ final class AppModel: ObservableObject {
                     if let error { self.error = error.localizedDescription; return }
                     self.applied = valid
                     self.draft = valid
-                    OverlayPreferences.save(valid)
+                    OverlayPreferences.save(valid, to: self.defaults)
                     self.error = nil
                 }
             }
@@ -136,12 +175,30 @@ final class AppModel: ObservableObject {
         guard !isBusy, cameraID != selectedCameraID,
               cameras.contains(where: { $0.id == cameraID }) else { return }
         selectedCameraID = cameraID
-        UserDefaults.standard.set(cameraID, forKey: "MovemberCam.cameraID")
-        if isRunning { stop(restarting: true) }
+        defaults.set(cameraID, forKey: "MovemberCam.cameraID")
+        demand.hasFailed = false
+        if isRunning { stop() } else { reconcileCapture() }
     }
 
-    func start() {
-        guard !isBusy, !isRunning, !selectedCameraID.isEmpty, engine != nil else { return }
+    func setCaptureSuspended(_ suspended: Bool) {
+        demand.isSuspended = suspended
+        reconcileCapture()
+    }
+
+    func setPreviewVisible(_ visible: Bool) {
+        demand.showPreview(visible)
+        reconcileCapture()
+    }
+
+    private func reconcileCapture() {
+        guard !isBusy, !isShuttingDown else { return }
+        if demand.shouldCapture && !selectedCameraID.isEmpty {
+            if !isRunning { start() }
+        } else if isRunning { stop() }
+    }
+
+    private func start() {
+        guard demand.shouldCapture, !isBusy, !isRunning, !selectedCameraID.isEmpty, engine != nil else { return }
         error = nil
         isBusy = true
         let token = UUID()
@@ -149,9 +206,9 @@ final class AppModel: ObservableObject {
         let cameraID = selectedCameraID
         Task {
             let authorized: Bool
-            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            switch cameraAuthorization() {
             case .authorized: authorized = true
-            case .notDetermined: authorized = await AVCaptureDevice.requestAccess(for: .video)
+            case .notDetermined: authorized = await requestCameraAccess()
             default: authorized = false
             }
             guard generation == token else { return }
@@ -159,6 +216,12 @@ final class AppModel: ObservableObject {
                 cameraDenied = true
                 error = "Camera access is off. Allow MovemberCam in System Settings → Privacy & Security → Camera."
                 isBusy = false
+                demand.hasFailed = true
+                return
+            }
+            guard demand.shouldCapture else {
+                isBusy = false
+                reconcileCapture()
                 return
             }
             cameraDenied = false
@@ -168,21 +231,23 @@ final class AppModel: ObservableObject {
                     self.isBusy = false
                     self.isRunning = error == nil
                     self.error = error?.localizedDescription
-                    if error == nil { UserDefaults.standard.set(cameraID, forKey: "MovemberCam.cameraID") }
+                    self.demand.hasFailed = error != nil
+                    if error == nil { self.defaults.set(cameraID, forKey: "MovemberCam.cameraID") }
+                    self.reconcileCapture()
                 }
             }
         }
     }
 
-    func stop() {
-        stop(restarting: false)
-    }
-
     func prepareForExtensionUpdate(_ completion: @escaping () -> Void) {
-        stop(restarting: false, completion: completion)
+        demand.isSuspended = true
+        stop(completion: completion)
     }
 
-    private func stop(restarting: Bool, completion: (() -> Void)? = nil) {
+    private func stop(completion: (() -> Void)? = nil) {
+        if let completion { stopCompletions.append(completion) }
+        guard !isStopping else { return }
+        isStopping = true
         let token = UUID()
         generation = token
         isBusy = true
@@ -191,15 +256,26 @@ final class AppModel: ObservableObject {
                 guard let self, self.generation == token else { return }
                 self.isRunning = false
                 self.isBusy = false
-                self.virtualCameraStatus = .idle(isInstalled: self.virtualCameraAvailable)
-                if restarting { self.start() }
-                completion?()
+                self.isStopping = false
+                let completions = self.stopCompletions
+                self.stopCompletions.removeAll()
+                completions.forEach { $0() }
+                self.reconcileCapture()
             }
         }
-        if engine == nil { isRunning = false; isBusy = false; completion?() }
+        if engine == nil {
+            isRunning = false
+            isBusy = false
+            isStopping = false
+            let completions = stopCompletions
+            stopCompletions.removeAll()
+            completions.forEach { $0() }
+        }
     }
 
     func shutdown(completion: @escaping () -> Void) {
+        isShuttingDown = true
+        demand.isSuspended = true
         generation = UUID()
         guard let engine else { completion(); return }
         engine.stop(completion: completion)

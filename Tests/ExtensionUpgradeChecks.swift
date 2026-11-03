@@ -12,6 +12,7 @@ import SystemExtensions
         var requests: [OSSystemExtensionRequest] = []
         var ticks: [() -> Void] = []
         var paused = false
+        var suspensions: [Bool] = []
         let defaults: UserDefaults
         init(defaults: UserDefaults = .standard) { self.defaults = defaults }
         lazy var installer: ExtensionInstaller = {
@@ -19,6 +20,7 @@ import SystemExtensions
                 canInstall: true, submit: { [unowned self] in self.requests.append($0) },
                 schedule: { [unowned self] in self.ticks.append($0) }, recoveryDefaults: self.defaults)
             value.prepareForActivation = { [unowned self] completion in self.paused = true; completion() }
+            value.captureSuspensionChanged = { [unowned self] in self.suspensions.append($0) }
             return value
         }()
         func drain() { while !ticks.isEmpty { ticks.removeFirst()() } }
@@ -37,6 +39,7 @@ import SystemExtensions
             isEnabled: true, isAwaitingApproval: false, isUninstalling: false)])
         try check(update.paused && update.requests.count == 1 && update.installer.busy,
                   "An older extension pauses capture and starts its automatic update")
+        try check(update.suspensions == [true], "Installer suspends capture without relying on a visible Settings window")
         let activation = update.requests[0]
         update.installer.install()
         try check(update.requests.count == 1, "Repeated install actions do not overlap a pending update")
@@ -48,7 +51,10 @@ import SystemExtensions
                   "System Settings remains actionable while macOS is waiting for approval")
         update.installer.request(activation, didFinishWithResult: .completed)
         try check(update.installer.state == .verifying, "Activation completion waits for device discovery")
-        try check(!update.installer.blocksCapture, "Physical preview remains usable while virtual-camera discovery is pending")
+        try check(!update.installer.blocksCapture && update.suspensions == [true, false],
+                  "Leaving installation allows consumer demand to control capture again")
+        update.installer.observeCameraStatus(.requiresUpdate)
+        try check(!update.installer.isReady, "An extension without demand reporting cannot complete verification")
         update.installer.observeCameraStatus(.cannotOpen(-1))
         try check(!update.installer.isReady, "A connection failure cannot report a successful update")
         update.installer.observeCameraStatus(.idle(isInstalled: true))
@@ -57,6 +63,7 @@ import SystemExtensions
         update.installer.uninstall()
         update.installer.request(update.requests.last!, didFinishWithResult: .completed)
         try check(update.installer.state == .removed, "Uninstallation reports removal rather than update success")
+        try check(update.suspensions == [true, false, true, false], "Removal also suspends capture for its lifetime")
 
         let reboot = Harness()
         reboot.installer.install()

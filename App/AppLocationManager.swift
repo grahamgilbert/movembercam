@@ -46,18 +46,18 @@ final class AppLocationManager: ObservableObject {
         }
     }
 
-    func restart(resumingCamera: Bool) {
+    func restart() {
         guard !isMoving else { return }
         isMoving = true
-        Task { await relaunch(at: Bundle.main.bundleURL, resumingCamera: resumingCamera) }
+        Task { await relaunch(at: Bundle.main.bundleURL) }
     }
 
-    private func relaunch(at url: URL, resumingCamera: Bool = false) async {
+    private func relaunch(at url: URL) async {
         do {
             let relaunch = Process()
             relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
             relaunch.arguments = LaunchBehavior.relaunchArguments(processID: ProcessInfo.processInfo.processIdentifier,
-                applicationPath: url.path, wasCapturing: resumingCamera)
+                applicationPath: url.path)
             relaunch.standardInput = FileHandle.nullDevice
             relaunch.standardOutput = FileHandle.nullDevice
             relaunch.standardError = FileHandle.nullDevice

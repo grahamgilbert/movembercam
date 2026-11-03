@@ -4,7 +4,12 @@ import SystemExtensions
 /// Activation and camera discovery are separate events. Verify both before
 /// reporting success; an installed extension can still be unavailable to clients.
 final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionRequestDelegate {
-    @Published private(set) var state = CameraExtensionUpdateState.unchecked
+    @Published private(set) var state = CameraExtensionUpdateState.unchecked {
+        didSet {
+            let wasBlocking = oldValue == .installing || oldValue == .removing
+            if blocksCapture != wasBlocking { captureSuspensionChanged(blocksCapture) }
+        }
+    }
     var message: String {
         state == .unavailable && didRestartForRecovery
             ? "Enable MovemberCam in System Settings to finish connecting the camera." : state.message
@@ -25,6 +30,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     var blocksCapture: Bool { state == .installing || state == .removing }
     var needsApproval: Bool { state == .awaitingApproval || state == .disabled || state == .unavailable }
     var prepareForActivation: (@escaping () -> Void) -> Void = { $0() }
+    var captureSuspensionChanged: (Bool) -> Void = { _ in }
     var refreshCamera: () -> Void = {}
 
     private let bundledVersion: CameraExtensionVersion?

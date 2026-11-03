@@ -3,33 +3,75 @@ import XCTest
 
 final class CameraControlStateTests: XCTestCase {
     func testPermissionCanBeRequestedBeforeAnyCamerasAreVisible() {
-        let state = CameraControlState(permission: .notRequested, isRunning: false, isBusy: false, hasCamera: false)
+        let state = CameraControlState(permission: .notRequested, isBusy: false)
         XCTAssertTrue(state.isEnabled)
         XCTAssertEqual(state.action, .requestAccess)
     }
 
-    func testBlockedPermissionCanOpenSettingsWithoutAVisibleCamera() {
-        let state = CameraControlState(permission: .blocked, isRunning: false, isBusy: false, hasCamera: false)
+    func testBlockedPermissionCanOpenSettings() {
+        let state = CameraControlState(permission: .blocked, isBusy: false)
         XCTAssertTrue(state.isEnabled)
         XCTAssertEqual(state.action, .openSettings)
     }
 
-    func testStartingCaptureRequiresACameraAndPermission() {
-        XCTAssertFalse(CameraControlState(permission: .allowed, isRunning: false, isBusy: false, hasCamera: false).isEnabled)
-        let ready = CameraControlState(permission: .allowed, isRunning: false, isBusy: false, hasCamera: true)
-        XCTAssertTrue(ready.isEnabled)
-        XCTAssertEqual(ready.action, .start)
+    func testAuthorizedCameraHasNoManualStartOrStopAction() {
+        let state = CameraControlState(permission: .allowed, isBusy: false)
+        XCTAssertNil(state.action)
+        XCTAssertFalse(state.isEnabled)
     }
 
-    func testStoppingRemainsAvailableIfTheSelectedCameraDisappears() {
-        let state = CameraControlState(permission: .allowed, isRunning: true, isBusy: false, hasCamera: false)
-        XCTAssertTrue(state.isEnabled)
-        XCTAssertEqual(state.action, .stop)
-    }
-
-    func testTransitionsDisableTheButtonForEveryPermissionState() {
+    func testTransitionsDisablePermissionActions() {
         for permission in [CameraControlState.Permission.allowed, .blocked, .notRequested] {
-            XCTAssertFalse(CameraControlState(permission: permission, isRunning: false, isBusy: true, hasCamera: true).isEnabled)
+            XCTAssertFalse(CameraControlState(permission: permission, isBusy: true).isEnabled)
         }
+    }
+
+    func testDemandSurvivesExtensionReplacement() {
+        var demand = CameraCaptureDemand()
+        XCTAssertFalse(demand.shouldCapture)
+        demand.update(true)
+        XCTAssertTrue(demand.shouldCapture)
+        demand.isSuspended = true
+        XCTAssertFalse(demand.shouldCapture)
+        demand.isSuspended = false
+        XCTAssertTrue(demand.shouldCapture)
+        demand.update(false)
+        XCTAssertFalse(demand.shouldCapture)
+    }
+
+    func testFailureWaitsForAnotherConsumerSession() {
+        var demand = CameraCaptureDemand()
+        demand.update(true)
+        demand.hasFailed = true
+        demand.update(true)
+        XCTAssertFalse(demand.shouldCapture)
+        demand.update(false)
+        demand.update(true)
+        XCTAssertTrue(demand.shouldCapture)
+    }
+
+    func testPreviewAndVirtualConsumersIndependentlyKeepCaptureRunning() {
+        var demand = CameraCaptureDemand()
+        demand.showPreview(true)
+        XCTAssertTrue(demand.shouldCapture)
+        demand.update(true)
+        demand.showPreview(false)
+        XCTAssertTrue(demand.shouldCapture)
+        demand.update(false)
+        XCTAssertFalse(demand.shouldCapture)
+        demand.showPreview(true)
+        demand.update(false)
+        XCTAssertTrue(demand.shouldCapture)
+    }
+
+    func testIdleVirtualSnapshotDoesNotRetryAFailedPreview() {
+        var demand = CameraCaptureDemand()
+        demand.showPreview(true)
+        demand.hasFailed = true
+        demand.update(false)
+        XCTAssertFalse(demand.shouldCapture)
+        demand.showPreview(false)
+        demand.showPreview(true)
+        XCTAssertTrue(demand.shouldCapture)
     }
 }
