@@ -33,37 +33,35 @@ final class CameraAttentionTests: XCTestCase {
         XCTAssertNil(CameraAttentionSnapshot(extensionState: .removed, hasCamera: false).issue)
     }
 
-    func testNotificationsWaitForHiddenSettingsAndFinishedWork() {
+    func testNotificationsWaitForFinishedWork() {
         let issue = CameraAttentionSnapshot(extensionState: .disabled).issue!
         var policy = CameraAttentionNotificationPolicy()
-        XCTAssertNil(policy.next(issue: issue, settingsVisible: true, isWorking: false))
-        XCTAssertNil(policy.next(issue: issue, settingsVisible: false, isWorking: true))
-        XCTAssertEqual(policy.next(issue: issue, settingsVisible: false, isWorking: false), issue)
-        XCTAssertNil(policy.next(issue: issue, settingsVisible: false, isWorking: false))
+        XCTAssertNil(policy.next(issue: issue, isWorking: true))
+        XCTAssertEqual(policy.next(issue: issue, isWorking: false), issue)
+        XCTAssertNil(policy.next(issue: issue, isWorking: false))
     }
 
     func testDeliveredWarningsSurviveRechecksAndAppRestartsUntilRecovery() {
         let issue = CameraAttentionSnapshot(extensionState: .disabled).issue!
         var policy = CameraAttentionNotificationPolicy()
-        _ = policy.next(issue: issue, settingsVisible: false, isWorking: false)
+        _ = policy.next(issue: issue, isWorking: false)
         policy.didDeliver(issue.kind)
-        XCTAssertNil(policy.next(issue: nil, settingsVisible: false, isWorking: true))
-        policy.settingsClosed()
-        XCTAssertNil(policy.next(issue: issue, settingsVisible: false, isWorking: false))
+        XCTAssertNil(policy.next(issue: nil, isWorking: true))
+        XCTAssertNil(policy.next(issue: issue, isWorking: false))
         var relaunched = CameraAttentionNotificationPolicy(delivered: policy.delivered)
-        XCTAssertNil(relaunched.next(issue: issue, settingsVisible: false, isWorking: false))
+        XCTAssertNil(relaunched.next(issue: issue, isWorking: false))
         let other = CameraAttentionSnapshot(extensionState: .ready, hasCamera: false).issue!
-        XCTAssertEqual(relaunched.next(issue: other, settingsVisible: false, isWorking: false), other)
+        XCTAssertEqual(relaunched.next(issue: other, isWorking: false), other)
         relaunched.recovered()
-        XCTAssertEqual(relaunched.next(issue: issue, settingsVisible: false, isWorking: false), issue)
+        XCTAssertEqual(relaunched.next(issue: issue, isWorking: false), issue)
     }
 
     func testUnsentAlertsCanRetryWithoutLoopingWhenPermissionIsDenied() {
         let issue = CameraAttentionSnapshot(extensionState: .disabled).issue!
         var policy = CameraAttentionNotificationPolicy()
-        XCTAssertNotNil(policy.next(issue: issue, settingsVisible: false, isWorking: false))
-        XCTAssertNil(policy.next(issue: issue, settingsVisible: false, isWorking: false))
+        XCTAssertNotNil(policy.next(issue: issue, isWorking: false))
+        XCTAssertNil(policy.next(issue: issue, isWorking: false))
         policy.retryUnsent(issue.kind)
-        XCTAssertNotNil(policy.next(issue: issue, settingsVisible: false, isWorking: false))
+        XCTAssertNotNil(policy.next(issue: issue, isWorking: false))
     }
 }

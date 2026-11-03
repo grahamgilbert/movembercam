@@ -80,7 +80,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let window = settingsWindow
         let visible = !closing && window?.isVisible == true && window?.isMiniaturized == false && !NSApp.isHidden
         model?.setPreviewVisible(visible)
-        attention?.setSettingsVisible(visible)
     }
     func applicationDidHide(_ notification: Notification) { updatePreviewVisibility() }
     func applicationDidUnhide(_ notification: Notification) { updatePreviewVisibility() }
@@ -151,10 +150,7 @@ struct MenuBarIcon: View {
     @State private var handledRelaunch = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "mustache.fill")
-            if attention.issue != nil { Image(systemName: "exclamationmark.triangle.fill") }
-        }
+        Image(nsImage: MenuBarStatusImage.make(needsAttention: attention.issue != nil))
             .accessibilityLabel(attention.issue.map { "MovemberCam: " + $0.title } ?? "MovemberCam")
             .help(attention.issue?.title ?? "MovemberCam")
             .onAppear {
@@ -177,12 +173,7 @@ struct MenuBarControls: View {
     @ObservedObject var attention: CameraAttentionController
 
     var body: some View {
-        if let issue = attention.issue {
-            Label(issue.title, systemImage: "exclamationmark.triangle.fill")
-            Text(issue.message)
-            Button(issue.recovery.title, action: attention.recover).disabled(!attention.canRecover)
-            Divider()
-        } else {
+        if attention.issue == nil {
             Text(installer.state.connectionSummary ?? (model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Waiting for a video app"))
         }
         Toggle("Enable overlay", isOn: $model.isOverlayEnabled)
