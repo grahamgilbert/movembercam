@@ -29,7 +29,11 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         } else { message = state.message }
         return statusCheckError.map { message + " Couldn’t recheck macOS status: " + $0 } ?? message
     }
-    var recoveryAction: CameraExtensionRecoveryAction { state.recoveryAction(afterAppRestart: didRestartForRecovery) }
+    var recoveryAction: CameraExtensionRecoveryAction {
+        if state == .unavailable && changeRequest != nil { return .restartApp }
+        return state.recoveryAction(afterAppRestart: didRestartForRecovery)
+    }
+    var offersAppRestart: Bool { state == .unavailable && !didRestartForRecovery && changeRequest == nil }
     var recoveryEnabled: Bool {
         recoveryAction != .none && (!busy || recoveryAction == .openSettings ||
             (state == .unavailable && recoveryAction == .restartApp))
@@ -73,6 +77,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     private var removing = false
     private var verificationID = UUID()
     private var recoveryAttempts = 0
+    private var lastCameraStatus = VirtualCameraStatus.idle(isInstalled: false)
 
     override convenience init() {
         let url = Bundle.main.bundleURL.appendingPathComponent(
@@ -144,6 +149,14 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
                     "macOS did not respond to the camera status check. Try again or restart MovemberCam."))
             }
         }
+    }
+
+    func retryConnection() {
+        guard canInstall, !busy, state == .unavailable else { return }
+        recoveryAttempts = 0
+        Self.logger.notice("User requested connection recovery")
+        if !lastCameraStatus.isInstalled || lastCameraStatus == .requiresUpdate { activate() }
+        else { verify(resetConnection: true) }
     }
 
     func install() {
@@ -297,7 +310,6 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     private func verify(resetConnection: Bool = false) {
-        recoveryAttempts = 0
         state = .verifying
         let id = UUID()
         verificationID = id
@@ -314,9 +326,18 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             if remaining > 1 { self.poll(id: id, remaining: remaining - 1) }
             else if self.recoveryAttempts == 0 {
                 self.recoveryAttempts += 1
-                Self.logger.warning("Connection verification timed out; retrying local sink connection cycle=\(id.uuidString, privacy: .public)")
-                self.reconnectCamera()
-                self.poll(id: id, remaining: 20)
+                if !self.lastCameraStatus.isInstalled || self.lastCameraStatus == .requiresUpdate {
+                    // macOS can reject the replacement launch while the old job is
+                    // still being removed (EALREADY). A sink reset cannot register
+                    // a device that does not exist. Retry activation once, keeping
+                    // the same recovery budget across its completion callback.
+                    Self.logger.warning("No usable device after activation; retrying registration once cycle=\(id.uuidString, privacy: .public)")
+                    self.activate()
+                } else {
+                    Self.logger.warning("Connection verification timed out; retrying local sink connection cycle=\(id.uuidString, privacy: .public)")
+                    self.reconnectCamera()
+                    self.poll(id: id, remaining: 20)
+                }
             } else {
                 Self.logger.error("Connection recovery exhausted cycle=\(id.uuidString, privacy: .public)")
                 self.state = .unavailable
@@ -325,11 +346,13 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func observeCameraStatus(_ status: VirtualCameraStatus) {
+        lastCameraStatus = status
         if (state == .verifying || state == .unavailable), changeRequest == nil, status.isUsable {
             verificationID = UUID()
             state = .ready
             if didRestartForRecovery { recoveryDefaults.removeObject(forKey: Self.restartKey) }
         } else if state == .ready, !status.isUsable {
+            recoveryAttempts = 0
             // Output is already connecting; resetting on every connecting event
             // would feed another reset back into the status observer.
             verify()

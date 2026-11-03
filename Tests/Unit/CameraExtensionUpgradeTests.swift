@@ -74,7 +74,7 @@ final class CameraExtensionUpgradeTests: XCTestCase {
     func testRecoveryPresentsOnlyTheNextAction() {
         XCTAssertEqual(CameraExtensionUpdateState.notInstalled.recoveryAction(afterAppRestart: false), .install)
         XCTAssertEqual(CameraExtensionUpdateState.awaitingApproval.recoveryAction(afterAppRestart: false), .openSettings)
-        XCTAssertEqual(CameraExtensionUpdateState.unavailable.recoveryAction(afterAppRestart: false), .restartApp)
+        XCTAssertEqual(CameraExtensionUpdateState.unavailable.recoveryAction(afterAppRestart: false), .reconnect)
         XCTAssertEqual(CameraExtensionUpdateState.unavailable.recoveryAction(afterAppRestart: true), .openSettings)
         for state in [CameraExtensionUpdateState.checking, .installing, .awaitingActivation, .verifying, .ready, .restartRequired] {
             XCTAssertEqual(state.recoveryAction(afterAppRestart: false), .none)

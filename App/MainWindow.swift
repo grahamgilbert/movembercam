@@ -210,7 +210,18 @@ struct MainWindow: View {
                         .disabled(!installer.recoveryEnabled ||
                             (installer.recoveryAction == .restartApp && (model.isBusy || location.isMoving)))
                 }
+                if installer.offersAppRestart {
+                    Button("Restart MovemberCam", action: restartApp)
+                        .disabled(model.isBusy || location.isMoving)
+                }
             }
+        }
+    }
+
+    private func restartApp() {
+        model.prepareForRestart {
+            installer.noteAppRestart()
+            location.restart()
         }
     }
 
@@ -218,12 +229,9 @@ struct MainWindow: View {
         switch installer.recoveryAction {
         case .install: installer.install()
         case .retry: installer.refresh()
+        case .reconnect: installer.retryConnection()
         case .openSettings: installer.openSettings()
-        case .restartApp:
-            model.prepareForRestart {
-                installer.noteAppRestart()
-                location.restart()
-            }
+        case .restartApp: restartApp()
         case .none: break
         }
     }

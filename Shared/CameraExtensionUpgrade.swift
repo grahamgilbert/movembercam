@@ -84,7 +84,7 @@ enum CameraExtensionUpdateState: Equatable {
         case .verifying: return "Connecting the updated camera…"
         case .ready: return "Virtual camera ready."
         case .restartRequired: return "Restart your Mac to finish changing the camera extension."
-        case .unavailable: return "Restart MovemberCam to finish connecting the updated camera."
+        case .unavailable: return "The virtual camera is unavailable. Retry its connection."
         case .removing: return "Removing the virtual camera…"
         case .removed: return "Virtual camera removed."
         case .failed(let message): return message
@@ -104,13 +104,14 @@ enum CameraExtensionSettings {
 
 
 enum CameraExtensionRecoveryAction: Equatable {
-    case none, install, retry, restartApp, openSettings
+    case none, install, retry, reconnect, restartApp, openSettings
 
     var title: String? {
         switch self {
         case .none: return nil
         case .install: return "Install Virtual Camera"
         case .retry: return "Retry Update"
+        case .reconnect: return "Retry Connection"
         case .restartApp: return "Restart MovemberCam"
         case .openSettings: return "Open System Settings"
         }
@@ -123,7 +124,7 @@ extension CameraExtensionUpdateState {
         case .unchecked, .notInstalled, .removed: return .install
         case .awaitingApproval, .disabled: return .openSettings
         case .failed: return .retry
-        case .unavailable: return afterAppRestart ? .openSettings : .restartApp
+        case .unavailable: return afterAppRestart ? .openSettings : .reconnect
         default: return .none
         }
     }

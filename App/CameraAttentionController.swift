@@ -113,7 +113,9 @@ final class CameraAttentionController: ObservableObject {
         switch issue.recovery {
         case .extensionSettings: installer.openSettings()
         case .installExtension: installer.install()
-        case .retryExtension: installer.refresh()
+        case .retryExtension:
+            if installer.state == .unavailable { installer.retryConnection() }
+            else { installer.refresh() }
         case .restartApp: restartApp?()
         case .requestCameraAccess: model.performCameraAction()
         case .cameraSettings: model.openCameraSettings()

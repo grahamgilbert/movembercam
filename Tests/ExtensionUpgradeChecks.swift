@@ -106,8 +106,12 @@ import SystemExtensions
         recovery.installer.install()
         recovery.installer.request(recovery.requests[0], didFinishWithResult: .completed)
         recovery.drain()
-        try check(recovery.requests.count == 1 && recovery.reconnects == 2,
-                  "A stalled connection retries the local sink once without reinstalling the extension")
+        try check(recovery.requests.count == 2 && recovery.installer.state == .installing,
+                  "A missing device retries activation once after macOS has time to remove the old launch job")
+        recovery.installer.request(recovery.requests.last!, didFinishWithResult: .completed)
+        recovery.drain()
+        try check(recovery.requests.count == 2 && recovery.reconnects == 2,
+                  "Activation retry completion preserves the budget and cannot start a third registration")
         try check(recovery.installer.state == .unavailable && !recovery.installer.busy,
                   "Failed local recovery ends verification and exposes restart recovery after a bounded wait")
         for _ in 0..<4 {
@@ -120,7 +124,8 @@ import SystemExtensions
                   "Enabled background status checks cannot restart exhausted recovery or hide its failure")
         recovery.installer.request(recovery.requests[0], didFinishWithResult: .completed)
         try check(recovery.installer.state == .unavailable, "Stale request completions cannot overwrite recovery guidance")
-        try check(recovery.installer.recoveryAction == .restartApp, "Unavailable camera offers one app-restart action")
+        try check(recovery.installer.recoveryAction == .reconnect && recovery.installer.offersAppRestart,
+                  "Unavailable camera exposes Retry Connection with app restart available as a fallback")
         recovery.installer.noteAppRestart()
         try check(recovery.installer.recoveryAction == .openSettings, "A previous app restart advances to one settings action")
         try check(!recovery.installer.needsApproval && recovery.installer.message.contains("already enabled"),
@@ -128,6 +133,19 @@ import SystemExtensions
         recovery.installer.observeCameraStatus(.idle(isInstalled: true))
         try check(recovery.installer.isReady && recovery.reconnects == 2,
                   "Late camera discovery clears recovery guidance without another activation")
+        let sinkFailure = Harness()
+        sinkFailure.installer.install()
+        sinkFailure.installer.request(sinkFailure.requests[0], didFinishWithResult: .completed)
+        sinkFailure.installer.observeCameraStatus(.cannotStart(-4))
+        sinkFailure.drain()
+        try check(sinkFailure.requests.count == 1 && sinkFailure.reconnects == 2 && sinkFailure.installer.state == .unavailable,
+                  "A discoverable device with a sink error uses local reconnect instead of reactivation")
+        sinkFailure.installer.retryConnection()
+        sinkFailure.installer.retryConnection()
+        try check(sinkFailure.installer.state == .verifying && sinkFailure.requests.count == 1 && sinkFailure.reconnects == 3,
+                  "The visible Retry Connection action starts one fresh local recovery and serializes repeated clicks")
+        sinkFailure.installer.observeCameraStatus(.sending)
+        try check(sinkFailure.installer.isReady, "A late successful sink connection still recovers after the retry budget is exhausted")
         try checkApprovalRecovery()
         print("\(checks) extension upgrade checks passed")
     }
