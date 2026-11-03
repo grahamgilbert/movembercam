@@ -26,6 +26,7 @@ final class CameraEngine {
     var onFailure: ((String) -> Void)?
     var starts: [String] = []
     var stops = 0
+    var reconnects = 0
     var startCompletion: ((Error?) -> Void)?
     var stopCompletion: (() -> Void)?
     var holdStop = false
@@ -33,6 +34,7 @@ final class CameraEngine {
     init(configuration: OverlayConfiguration) throws { Self.latest = self }
     static func cameras() -> [CameraChoice] { choices }
     func refreshVirtualCameraAvailability() {}
+    func reconnectVirtualCamera() { reconnects += 1 }
     func showPlaceholder() {}
     func setOverlayEnabled(_ enabled: Bool) {}
     func configure(_ configuration: OverlayConfiguration, completion: @escaping (Error?) -> Void) { completion(nil) }

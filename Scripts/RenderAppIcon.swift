@@ -2,14 +2,18 @@ import AppKit
 import Foundation
 
 // Render the app's existing Mo artwork as a camera icon at every macOS icon size.
-guard CommandLine.arguments.count == 3,
+guard [3, 4].contains(CommandLine.arguments.count),
       let logo = NSImage(contentsOfFile: CommandLine.arguments[1]),
       let source = logo.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-    fputs("Usage: RenderAppIcon.swift LOGO.png OUTPUT_DIRECTORY\n", stderr)
+    fputs("Usage: RenderAppIcon.swift LOGO.png OUTPUT_DIRECTORY [ASSET_CATALOG]\n", stderr)
     exit(1)
 }
 let output = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
 let iconset = output.appendingPathComponent("AppIcon.iconset", isDirectory: true)
+let catalog = CommandLine.arguments.count == 4 ? URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true) : nil
+let asset = catalog?.appendingPathComponent("AppIcon.appiconset", isDirectory: true)
+if let asset { try FileManager.default.createDirectory(at: asset, withIntermediateDirectories: true) }
+var assetImages: [[String: String]] = []
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 let mask = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: source.width, pixelsHigh: source.height,
     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -64,8 +68,20 @@ for points in [16, 32, 128, 256, 512] {
         NSGraphicsContext.restoreGraphicsState()
         let suffix = scale == 2 ? "@2x" : ""
         let png = bitmap.representation(using: .png, properties: [:])!
-        try png.write(to: iconset.appendingPathComponent("icon_\(points)x\(points)\(suffix).png"))
+        let filename = "icon_\(points)x\(points)\(suffix).png"
+        try png.write(to: iconset.appendingPathComponent(filename))
+        if let asset {
+            try png.write(to: asset.appendingPathComponent(filename))
+            assetImages.append(["idiom": "mac", "size": "\(points)x\(points)", "scale": "\(scale)x", "filename": filename])
+        }
         if pixels == 1024 { try png.write(to: output.appendingPathComponent("AppIcon.png")) }
     }
+}
+if let catalog, let asset {
+    let info: [String: Any] = ["info": ["author": "xcode", "version": 1]]
+    try JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted, .sortedKeys])
+        .write(to: catalog.appendingPathComponent("Contents.json"))
+    try JSONSerialization.data(withJSONObject: ["images": assetImages, "info": ["author": "xcode", "version": 1]], options: [.prettyPrinted, .sortedKeys])
+        .write(to: asset.appendingPathComponent("Contents.json"))
 }
 print(iconset.path)

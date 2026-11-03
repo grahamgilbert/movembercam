@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import os
 
 struct CameraChoice: Identifiable, Equatable {
     let id: String
@@ -12,6 +13,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
     var onDemand: ((Bool) -> Void)?
     var onFailure: ((String) -> Void)?
 
+    private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "Capture")
     private let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "MovemberCam.capture", qos: .userInitiated)
     private let frameQueue = DispatchQueue(label: "MovemberCam.frames", qos: .userInteractive)
@@ -35,10 +37,13 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionRuntimeError,
             object: session, queue: nil) { [weak self] notification in
                 let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error
+                let failure = error as NSError?
+                Self.logger.error("Capture runtime error domain=\(failure?.domain ?? "unknown", privacy: .public) code=\(failure?.code ?? 0, privacy: .public)")
                 self?.onFailure?(error?.localizedDescription ?? "Camera capture stopped unexpectedly.")
             })
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionWasInterrupted,
             object: session, queue: nil) { [weak self] _ in
+                Self.logger.error("Capture session interrupted")
                 self?.onFailure?("The camera was interrupted. Reopen MovemberCam in your video app to try again.")
             })
     }
@@ -54,6 +59,8 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
             $0.localizedName != VideoFormat.cameraName
         }.map { CameraChoice(id: $0.uniqueID, name: $0.localizedName) }
     }
+
+    func reconnectVirtualCamera() { virtualCamera.reconnect() }
 
     func refreshVirtualCameraAvailability() {
         virtualCamera.refreshAvailability()
@@ -103,6 +110,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     func start(cameraID: String, completion: @escaping (Error?) -> Void) {
         sessionQueue.async {
+            Self.logger.notice("Starting physical camera")
             do {
                 guard let device = AVCaptureDevice(uniqueID: cameraID) else {
                     throw VideoError.message("That camera is disconnected. Choose another camera.")
@@ -163,8 +171,12 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
                 self.frameQueue.sync { self.delivering = true; self.previousFrameTime = -Double.infinity }
                 self.session.startRunning()
                 guard self.session.isRunning else { throw VideoError.message("The camera did not start.") }
+                let dimensions = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+                Self.logger.notice("Capture running format=\(dimensions.width, privacy: .public)x\(dimensions.height, privacy: .public)")
                 completion(nil)
             } catch {
+                let failure = error as NSError
+                Self.logger.error("Capture start failed domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)")
                 self.frameQueue.sync { self.delivering = false; self.virtualCamera.stop() }
                 self.session.stopRunning()
                 self.session.beginConfiguration()
@@ -178,6 +190,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
 
     func stop(completion: (() -> Void)? = nil) {
         sessionQueue.async {
+            Self.logger.notice("Stopping physical camera")
             self.frameQueue.sync { self.delivering = false; self.virtualCamera.stop() }
             self.session.stopRunning()
             self.session.beginConfiguration()
@@ -201,6 +214,8 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
             // A full buffer pool means consumers are behind: drop this frame instead of blocking capture.
             if case VideoError.operation(_, kCVReturnWouldExceedAllocationThreshold) = error { return }
             delivering = false
+            let failure = error as NSError
+            Self.logger.error("Frame composition failed domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)")
             onFailure?(error.localizedDescription)
         }
     }

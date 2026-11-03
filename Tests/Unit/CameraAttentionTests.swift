@@ -56,6 +56,22 @@ final class CameraAttentionTests: XCTestCase {
         XCTAssertEqual(relaunched.next(issue: issue, isWorking: false), issue)
     }
 
+    func testNotificationCopyIsBriefAndExcludesDetailedDiagnostics() {
+        let kinds: [CameraAttentionIssue.Kind] = [.extensionPermission, .missingExtension, .extensionFailure,
+            .restartRequired, .cameraPermission, .missingCamera, .captureFailure]
+        for kind in kinds {
+            let issue = CameraAttentionIssue(kind: kind, title: "Detailed failure", message: "Private diagnostic detail → Settings → Submenu", recovery: .showSettings)
+            XCTAssertLessThanOrEqual(issue.notificationCopy.title.count, 30)
+            XCTAssertLessThanOrEqual(issue.notificationCopy.body.count, 60)
+            XCTAssertFalse(issue.notificationCopy.body.contains("→"))
+            XCTAssertFalse(issue.notificationCopy.body.contains("Private"))
+        }
+        let approval = CameraAttentionSnapshot(extensionState: .awaitingApproval).issue!
+        XCTAssertEqual(approval.notificationCopy.title, "Camera needs approval")
+        XCTAssertEqual(approval.notificationCopy.body, "Open MovemberCam to enable it.")
+        XCTAssertTrue(approval.message.contains("System Settings"))
+    }
+
     func testUnsentAlertsCanRetryWithoutLoopingWhenPermissionIsDenied() {
         let issue = CameraAttentionSnapshot(extensionState: .disabled).issue!
         var policy = CameraAttentionNotificationPolicy()

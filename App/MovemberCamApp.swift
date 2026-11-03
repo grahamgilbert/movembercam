@@ -1,5 +1,6 @@
 import SwiftUI
 import Carbon
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -43,6 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+        Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "Lifecycle")
+            .notice("App launched version=\(version, privacy: .public) build=\(build, privacy: .public) macOS=\(ProcessInfo.processInfo.operatingSystemVersionString, privacy: .public)")
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
         let event = NSAppleEventManager.shared().currentAppleEvent

@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import os
 
 @MainActor
 protocol CameraIssueNotifying: AnyObject {
@@ -15,6 +16,7 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
     private static let identifier = "MovemberCam.cameraAttention"
     private static let category = "MovemberCam.cameraRecovery"
     private static let openAction = "MovemberCam.openCameraSettings"
+    private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "Notifications")
     private let center: UNUserNotificationCenter
     var onOpenSettings: (() -> Void)?
     var shouldPresent: ((CameraAttentionIssue.Kind) -> Bool)?
@@ -30,6 +32,7 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
 
     func authorize() async -> Bool {
         let settings = await center.notificationSettings()
+        Self.logger.notice("Notification authorization=\(settings.authorizationStatus.rawValue, privacy: .public) alerts=\(settings.alertSetting.rawValue, privacy: .public)")
         switch settings.authorizationStatus {
         case .authorized: return settings.alertSetting == .enabled
         case .notDetermined, .provisional:
@@ -39,13 +42,24 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
         }
     }
 
-    func deliver(_ issue: CameraAttentionIssue) async throws {
+    static func content(for issue: CameraAttentionIssue) -> UNMutableNotificationContent {
         let content = UNMutableNotificationContent()
-        content.title = issue.title
-        content.body = issue.message
+        content.title = issue.notificationCopy.title
+        content.body = issue.notificationCopy.body
         content.categoryIdentifier = Self.category
         content.userInfo = ["cameraIssue": issue.kind.rawValue]
-        try await center.add(UNNotificationRequest(identifier: Self.identifier, content: content, trigger: nil))
+        return content
+    }
+
+    func deliver(_ issue: CameraAttentionIssue) async throws {
+        do {
+            try await center.add(UNNotificationRequest(identifier: Self.identifier, content: Self.content(for: issue), trigger: nil))
+            Self.logger.notice("Notification submitted kind=\(issue.kind.rawValue, privacy: .public)")
+        } catch {
+            let failure = error as NSError
+            Self.logger.error("Notification failed kind=\(issue.kind.rawValue, privacy: .public) domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)")
+            throw error
+        }
     }
 
     func clear() {
@@ -60,6 +74,7 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
         Task { @MainActor [weak self] in
             guard identifier == Self.identifier,
                   action == UNNotificationDefaultActionIdentifier || action == Self.openAction else { return }
+            Self.logger.notice("Notification opened action=\(action, privacy: .public)")
             self?.onOpenSettings?()
         }
         completionHandler()
@@ -70,7 +85,9 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
         let rawKind = notification.request.content.userInfo["cameraIssue"] as? String
         Task { @MainActor [weak self] in
             let kind = rawKind.flatMap(CameraAttentionIssue.Kind.init(rawValue:))
-            completionHandler(kind.map { self?.shouldPresent?($0) == true } == true ? [.banner, .list] : [])
+            let show = kind.map { self?.shouldPresent?($0) == true } == true
+            Self.logger.notice("Notification foreground presentation kind=\(rawKind ?? "unknown", privacy: .public) allowed=\(show, privacy: .public)")
+            completionHandler(show ? [.banner, .list] : [])
         }
     }
 }

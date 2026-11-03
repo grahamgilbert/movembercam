@@ -23,8 +23,10 @@ struct MainWindow: View {
                         }
                     }
                     Spacer()
-                    Button(issue.recovery.title, action: attention.recover)
-                        .disabled(!attention.canRecover)
+                    if issue.recovery != .showSettings {
+                        Button(issue.recovery.title, action: attention.recover)
+                            .disabled(!attention.canRecover)
+                    }
                 }.padding(16).background(Color.orange.opacity(0.1))
                 Divider()
             }

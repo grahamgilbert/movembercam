@@ -2,6 +2,11 @@ import XCTest
 @testable import MovemberCore
 
 final class CameraExtensionUpgradeTests: XCTestCase {
+    func testDiagnosticStateExcludesPrivateFailureDetails() {
+        XCTAssertEqual(CameraExtensionUpdateState.failed("private URL or device name").diagnosticName, "failed")
+        XCTAssertEqual(CameraExtensionUpdateState.verifying.diagnosticName, "verifying")
+    }
+
     private let bundled = CameraExtensionVersion(release: "1.0.3", build: "10")
     private func installed(_ build: String, enabled: Bool = true, approval: Bool = false,
                            uninstalling: Bool = false, release: String = "1.0.3") -> InstalledCameraExtension {

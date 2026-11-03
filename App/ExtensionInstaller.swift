@@ -1,12 +1,18 @@
 import AppKit
 import ServiceManagement
 import SystemExtensions
+import os
 
 /// Activation and camera discovery are separate events. Verify both before
 /// reporting success; an installed extension can still be unavailable to clients.
 final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionRequestDelegate {
+    private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "ExtensionInstaller")
+    private var lastInstalledSnapshot: String?
     @Published private(set) var state = CameraExtensionUpdateState.unchecked {
         didSet {
+            if oldValue != state {
+                Self.logger.notice("Installer state \(oldValue.diagnosticName, privacy: .public) -> \(self.state.diagnosticName, privacy: .public) recoveryAttempt=\(self.recoveryAttempts, privacy: .public)")
+            }
             let wasBlocking = oldValue == .installing || oldValue == .removing
             if blocksCapture != wasBlocking { captureSuspensionChanged(blocksCapture) }
         }
@@ -48,6 +54,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     var prepareForActivation: (@escaping () -> Void) -> Void = { $0() }
     var captureSuspensionChanged: (Bool) -> Void = { _ in }
     var refreshCamera: () -> Void = {}
+    var reconnectCamera: () -> Void = {}
 
     private let bundledVersion: CameraExtensionVersion?
     private let recoveryDefaults: UserDefaults
@@ -90,6 +97,8 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         self.submit = submit
         self.schedule = schedule
         super.init()
+        let version = bundledVersion.map { "\($0.release)(\($0.build))" } ?? "missing"
+        Self.logger.notice("Installer initialized version=\(version, privacy: .public) canInstall=\(canInstall, privacy: .public)")
     }
 
     func checkForUpgrade() {
@@ -107,7 +116,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             propertiesPurpose = .approval(changeRequest)
         } else {
             guard !state.busy else { return }
-            recoveryAttempts = 0
+            if !offersStatusCheck { recoveryAttempts = 0 }
             if offersStatusCheck { propertiesPurpose = .recovery(state) }
             else {
                 state = .checking
@@ -120,6 +129,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             forExtensionWithIdentifier: VideoFormat.extensionIdentifier, queue: .main)
         propertiesRequest = request
         request.delegate = self
+        Self.logger.debug("Status query submitted request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
         submit(request)
         waitForStatus(request, remaining: 20)
     }
@@ -129,6 +139,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             guard let self, let request, self.propertiesRequest === request else { return }
             if remaining > 1 { self.waitForStatus(request, remaining: remaining - 1) }
             else {
+                Self.logger.error("Status query timed out request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
                 self.request(request, didFailWithError: VideoError.message(
                     "macOS did not respond to the camera status check. Try again or restart MovemberCam."))
             }
@@ -156,6 +167,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             self.changeRequest = request
             self.removing = false
             request.delegate = self
+            Self.logger.notice("Activation submitted request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
             self.submit(request)
         }
     }
@@ -169,6 +181,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         changeRequest = request
         removing = true
         request.delegate = self
+        Self.logger.notice("Removal submitted request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
         submit(request)
     }
 
@@ -180,7 +193,15 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func receiveInstalled(_ installed: [InstalledCameraExtension], for request: OSSystemExtensionRequest) {
-        guard request === propertiesRequest else { return }
+        guard request === propertiesRequest else {
+            Self.logger.debug("Ignored stale status response request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
+            return
+        }
+        let snapshot = installed.map { "\($0.version.release)(\($0.version.build)) enabled=\($0.isEnabled) approval=\($0.isAwaitingApproval) uninstalling=\($0.isUninstalling)" }.joined(separator: "; ")
+        if snapshot != lastInstalledSnapshot {
+            lastInstalledSnapshot = snapshot
+            Self.logger.notice("Installed extensions [\(snapshot, privacy: .public)]")
+        }
         let purpose = propertiesPurpose
         propertiesRequest = nil
         propertiesPurpose = nil
@@ -212,7 +233,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             verificationID = UUID()
             state = .disabled
         case .verify:
-            guard state != .awaitingActivation else { return }
+            guard state != .awaitingActivation && state != .unavailable else { return }
             let id = UUID()
             verificationID = id
             state = .awaitingActivation
@@ -225,7 +246,10 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         schedule { [weak self] in
             guard let self, self.verificationID == id, self.state == .awaitingActivation else { return }
             if remaining > 1 { self.waitForActivation(id: id, remaining: remaining - 1) }
-            else { self.state = .unavailable }
+            else {
+                Self.logger.error("Activation completion timed out")
+                self.state = .unavailable
+            }
         }
     }
 
@@ -233,7 +257,13 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         guard let bundledVersion else { state = .failed("The bundled camera extension is missing."); return }
         switch CameraExtensionUpgradeAction.decide(bundled: bundledVersion, installed: installed) {
         case .installUpdate: activate()
-        case .verify: verify()
+        case .verify:
+            if state == .unavailable {
+                // Background property queries must not restart an exhausted verification cycle.
+                refreshCamera()
+            } else {
+                verify(resetConnection: state == .awaitingApproval || state == .disabled)
+            }
         case .notInstalled: state = .notInstalled
         case .enableInSettings: state = .disabled
         case .approveInSettings: state = .awaitingApproval
@@ -245,6 +275,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         guard request === changeRequest else { return }
         verificationID = UUID()
         statusCheckError = nil
+        Self.logger.notice("Activation awaiting user approval request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
         state = .awaitingApproval
     }
 
@@ -257,17 +288,21 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
         guard request === changeRequest else { return }
+        Self.logger.notice("Extension change completed removal=\(self.removing, privacy: .public) request=\(ObjectIdentifier(request).hashValue, privacy: .public) result=\(result.rawValue, privacy: .public)")
         changeRequest = nil
         statusCheckError = nil
         if result == .willCompleteAfterReboot { state = .restartRequired }
         else if removing { state = .removed; refreshCamera() }
-        else { verify() }
+        else { verify(resetConnection: true) }
     }
 
-    private func verify() {
+    private func verify(resetConnection: Bool = false) {
+        recoveryAttempts = 0
         state = .verifying
         let id = UUID()
         verificationID = id
+        if resetConnection { reconnectCamera() }
+        Self.logger.notice("Verifying connection cycle=\(id.uuidString, privacy: .public)")
         poll(id: id, remaining: 20)
     }
 
@@ -278,10 +313,14 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             guard let self, self.verificationID == id, self.state == .verifying else { return }
             if remaining > 1 { self.poll(id: id, remaining: remaining - 1) }
             else if self.recoveryAttempts == 0 {
-                // Retry once after the previous extension's launchd job has exited.
                 self.recoveryAttempts += 1
-                self.activate()
-            } else { self.state = .unavailable }
+                Self.logger.warning("Connection verification timed out; retrying local sink connection cycle=\(id.uuidString, privacy: .public)")
+                self.reconnectCamera()
+                self.poll(id: id, remaining: 20)
+            } else {
+                Self.logger.error("Connection recovery exhausted cycle=\(id.uuidString, privacy: .public)")
+                self.state = .unavailable
+            }
         }
     }
 
@@ -291,12 +330,16 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             state = .ready
             if didRestartForRecovery { recoveryDefaults.removeObject(forKey: Self.restartKey) }
         } else if state == .ready, !status.isUsable {
+            // Output is already connecting; resetting on every connecting event
+            // would feed another reset back into the status observer.
             verify()
         }
     }
 
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
         guard request === changeRequest || request === propertiesRequest else { return }
+        let detail = error as NSError
+        Self.logger.error("Extension request failed request=\(ObjectIdentifier(request).hashValue, privacy: .public) domain=\(detail.domain, privacy: .public) code=\(detail.code, privacy: .public)")
         if request === propertiesRequest {
             let purpose = propertiesPurpose
             propertiesRequest = nil

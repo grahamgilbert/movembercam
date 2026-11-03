@@ -12,6 +12,7 @@ case "${1:-preview}" in
     xcodebuild -quiet -project MovemberCam.xcodeproj -scheme MovemberCam \
       -configuration Debug -derivedDataPath build CODE_SIGNING_ALLOWED=NO MOVEMBER_PREVIEW_BUILD=YES \
       ENABLE_DEBUG_DYLIB=NO build
+    python3 Scripts/verify-app-resources.py build/Build/Products/Debug/MovemberCam.app
     # Locally sign executable code so Apple Silicon can launch the preview bundle.
     codesign --force --sign - build/Build/Products/Debug/MovemberCam.app/Contents/Library/SystemExtensions/*.systemextension
     codesign --force --sign - --entitlements Config/Preview.entitlements build/Build/Products/Debug/MovemberCam.app
