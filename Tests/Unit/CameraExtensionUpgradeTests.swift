@@ -25,6 +25,29 @@ final class CameraExtensionUpgradeTests: XCTestCase {
     func testAwaitingApprovalDoesNotSubmitAnotherUpdate() {
         XCTAssertEqual(CameraExtensionUpgradeAction.decide(bundled: bundled, installed: [installed("10", enabled: false, approval: true)]), .approveInSettings)
     }
+    func testOlderPendingApprovalDoesNotHideANewerEnabledExtension() {
+        XCTAssertEqual(CameraExtensionUpgradeAction.decide(bundled: bundled,
+            installed: [installed("8", enabled: false, approval: true), installed("10")]), .verify)
+        XCTAssertEqual(CameraExtensionUpgradeAction.decide(bundled: bundled,
+            installed: [installed("8", enabled: false, approval: true), installed("9")]), .installUpdate)
+        XCTAssertEqual(CameraExtensionUpgradeAction.decide(bundled: bundled,
+            installed: [installed("11", enabled: false, approval: true), installed("10")]), .approveInSettings)
+    }
+    func testApprovalInstructionsNameTheCameraSpecificSettings() {
+        XCTAssertTrue(CameraExtensionSettings.instructions(macOSMajorVersion: 14).contains("Privacy & Security"))
+        XCTAssertTrue(CameraExtensionSettings.instructions(macOSMajorVersion: 15).contains("Camera Extensions"))
+        let modern = CameraExtensionSettings.instructions(macOSMajorVersion: 26)
+        XCTAssertTrue(modern.contains("By Category → Camera Extensions"))
+        XCTAssertTrue(modern.contains("MovemberCam Camera"))
+    }
+    func testEnabledButPendingActivationDoesNotAskForPermissionAgain() {
+        XCTAssertTrue(CameraExtensionUpdateState.awaitingActivation.message.contains("is enabled"))
+        XCTAssertTrue(CameraExtensionUpdateState.awaitingActivation.busy)
+        XCTAssertFalse(CameraExtensionUpdateState.awaitingApproval.busy)
+        XCTAssertEqual(CameraExtensionUpdateState.awaitingApproval.connectionSummary, "Camera extension approval required")
+        XCTAssertEqual(CameraExtensionUpdateState.awaitingActivation.connectionSummary, "Waiting for macOS activation")
+        XCTAssertNil(CameraExtensionUpdateState.ready.connectionSummary)
+    }
     func testOldRemovalEntriesDoNotTriggerReinstallation() {
         let entries = [installed("9", uninstalling: true), installed("10")]
         XCTAssertEqual(CameraExtensionUpgradeAction.decide(bundled: bundled, installed: entries), .verify)
@@ -48,7 +71,7 @@ final class CameraExtensionUpgradeTests: XCTestCase {
         XCTAssertEqual(CameraExtensionUpdateState.awaitingApproval.recoveryAction(afterAppRestart: false), .openSettings)
         XCTAssertEqual(CameraExtensionUpdateState.unavailable.recoveryAction(afterAppRestart: false), .restartApp)
         XCTAssertEqual(CameraExtensionUpdateState.unavailable.recoveryAction(afterAppRestart: true), .openSettings)
-        for state in [CameraExtensionUpdateState.checking, .installing, .verifying, .ready, .restartRequired] {
+        for state in [CameraExtensionUpdateState.checking, .installing, .awaitingActivation, .verifying, .ready, .restartRequired] {
             XCTAssertEqual(state.recoveryAction(afterAppRestart: false), .none)
         }
     }

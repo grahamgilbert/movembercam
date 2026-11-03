@@ -27,7 +27,7 @@ struct MainWindow: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshCameras()
-            if installer.state == .awaitingApproval || installer.state == .disabled { installer.refresh() }
+            if installer.offersStatusCheck { installer.refresh() }
         }
         .onReceive(model.$virtualCameraStatus) { installer.observeCameraStatus($0) }
         .alert("Move MovemberCam to Applications?", isPresented: $location.isOfferingMove) {
@@ -147,8 +147,7 @@ struct MainWindow: View {
                 .accessibilityLabel("Camera preview with fundraising overlay")
 
                 HStack {
-                    Text(installer.busy ? "Updating virtual camera…" :
-                        installer.state == .unavailable ? "Restart MovemberCam to reconnect" : model.outputStatus)
+                    Text(installer.state.connectionSummary ?? model.outputStatus)
                     Spacer()
                     Text(model.isRunning
                          ? "Auto · \(model.previewFormat.width) × \(model.previewFormat.height) · Up to 30 fps"
@@ -188,8 +187,12 @@ struct MainWindow: View {
                     .foregroundStyle(.green)
             } else {
                 HStack(alignment: .top, spacing: 8) {
-                    if installer.busy { ProgressView().controlSize(.small) }
+                    if installer.showsProgress { ProgressView().controlSize(.small) }
                     Text(installer.message).font(.callout).textSelection(.enabled)
+                }
+                if installer.offersStatusCheck && location.isInApplications {
+                    Button(installer.isCheckingStatus ? "Checking Status…" : "Recheck Camera Status", action: installer.refresh)
+                        .disabled(installer.isCheckingStatus)
                 }
                 if let title = installer.recoveryAction.title, location.isInApplications {
                     Button(title, action: recoverExtension)

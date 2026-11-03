@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SystemExtensions
 
 /// Activation and camera discovery are separate events. Verify both before
@@ -10,12 +11,27 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             if blocksCapture != wasBlocking { captureSuspensionChanged(blocksCapture) }
         }
     }
+    @Published private(set) var isCheckingStatus = false
+    @Published private(set) var statusCheckError: String?
     var message: String {
-        state == .unavailable && didRestartForRecovery
-            ? "Enable MovemberCam in System Settings to finish connecting the camera." : state.message
+        let message: String
+        if state == .unavailable && changeRequest != nil {
+            message = "MovemberCam Camera is enabled, but macOS hasn’t finished activation. Restart MovemberCam to reconnect."
+        } else if state == .unavailable && didRestartForRecovery {
+            message = "The camera is still unavailable. " + CameraExtensionSettings.instructions() +
+                " If it is already enabled, restart your Mac to finish connecting it."
+        } else { message = state.message }
+        return statusCheckError.map { message + " Couldn’t recheck macOS status: " + $0 } ?? message
     }
     var recoveryAction: CameraExtensionRecoveryAction { state.recoveryAction(afterAppRestart: didRestartForRecovery) }
-    var recoveryEnabled: Bool { recoveryAction != .none && (!busy || recoveryAction == .openSettings) }
+    var recoveryEnabled: Bool {
+        recoveryAction != .none && (!busy || recoveryAction == .openSettings ||
+            (state == .unavailable && recoveryAction == .restartApp))
+    }
+    var showsProgress: Bool { state.busy }
+    var offersStatusCheck: Bool {
+        [.awaitingApproval, .awaitingActivation, .disabled, .unavailable].contains(state)
+    }
     private static let restartKey = "MovemberCam.extensionRecoveryRestart"
     private var recoveryVersion: String? { bundledVersion.map { "\($0.release)(\($0.build))" } }
     private var didRestartForRecovery: Bool {
@@ -25,10 +41,10 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     func noteAppRestart() {
         if let recoveryVersion { recoveryDefaults.set(recoveryVersion, forKey: Self.restartKey) }
     }
-    var busy: Bool { state.busy || changeRequest != nil }
+    var busy: Bool { state.busy || state == .awaitingApproval || changeRequest != nil || propertiesRequest != nil }
     var isReady: Bool { state == .ready }
     var blocksCapture: Bool { state == .installing || state == .removing }
-    var needsApproval: Bool { state == .awaitingApproval || state == .disabled || state == .unavailable }
+    var needsApproval: Bool { state == .awaitingApproval || state == .disabled }
     var prepareForActivation: (@escaping () -> Void) -> Void = { $0() }
     var captureSuspensionChanged: (Bool) -> Void = { _ in }
     var refreshCamera: () -> Void = {}
@@ -40,6 +56,12 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     private let schedule: (@escaping () -> Void) -> Void
     private var checked = false
     private var propertiesRequest: OSSystemExtensionRequest?
+    private enum PropertiesPurpose {
+        case discovery
+        case recovery(CameraExtensionUpdateState)
+        case approval(OSSystemExtensionRequest)
+    }
+    private var propertiesPurpose: PropertiesPurpose?
     private var changeRequest: OSSystemExtensionRequest?
     private var removing = false
     private var verificationID = UUID()
@@ -77,14 +99,40 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func refresh() {
-        guard !busy, canInstall else { return }
-        recoveryAttempts = 0
-        state = .checking
+        guard canInstall, propertiesRequest == nil else { return }
+        if let changeRequest {
+            // Querying macOS is safe while activation waits for the user. Keep the
+            // activation request alive and never submit a duplicate change request.
+            guard offersStatusCheck else { return }
+            propertiesPurpose = .approval(changeRequest)
+        } else {
+            guard !state.busy else { return }
+            recoveryAttempts = 0
+            if offersStatusCheck { propertiesPurpose = .recovery(state) }
+            else {
+                state = .checking
+                propertiesPurpose = .discovery
+            }
+        }
+        statusCheckError = nil
+        isCheckingStatus = true
         let request = OSSystemExtensionRequest.propertiesRequest(
             forExtensionWithIdentifier: VideoFormat.extensionIdentifier, queue: .main)
         propertiesRequest = request
         request.delegate = self
         submit(request)
+        waitForStatus(request, remaining: 20)
+    }
+
+    private func waitForStatus(_ request: OSSystemExtensionRequest, remaining: Int) {
+        schedule { [weak self, weak request] in
+            guard let self, let request, self.propertiesRequest === request else { return }
+            if remaining > 1 { self.waitForStatus(request, remaining: remaining - 1) }
+            else {
+                self.request(request, didFailWithError: VideoError.message(
+                    "macOS did not respond to the camera status check. Try again or restart MovemberCam."))
+            }
+        }
     }
 
     func install() {
@@ -99,6 +147,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     private func activate() {
         verificationID = UUID()
+        statusCheckError = nil
         state = .installing
         prepareForActivation { [weak self] in
             guard let self, self.state == .installing else { return }
@@ -124,12 +173,60 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func request(_ request: OSSystemExtensionRequest, foundProperties properties: [OSSystemExtensionProperties]) {
-        guard request === propertiesRequest else { return }
-        propertiesRequest = nil
-        inspect(properties.map {
+        receiveInstalled(properties.map {
             InstalledCameraExtension(version: CameraExtensionVersion(release: $0.bundleShortVersion, build: $0.bundleVersion),
                 isEnabled: $0.isEnabled, isAwaitingApproval: $0.isAwaitingUserApproval, isUninstalling: $0.isUninstalling)
-        })
+        }, for: request)
+    }
+
+    func receiveInstalled(_ installed: [InstalledCameraExtension], for request: OSSystemExtensionRequest) {
+        guard request === propertiesRequest else { return }
+        let purpose = propertiesPurpose
+        propertiesRequest = nil
+        propertiesPurpose = nil
+        isCheckingStatus = false
+        switch purpose {
+        case .discovery:
+            guard changeRequest == nil else { return }
+            inspect(installed)
+        case .recovery(let previous):
+            guard changeRequest == nil, state == previous else { return }
+            inspect(installed)
+        case .approval(let activation):
+            // A query sent before completion/failure must not overwrite its result.
+            guard changeRequest === activation else { return }
+            inspectPendingApproval(installed)
+        case nil: break
+        }
+    }
+
+    private func inspectPendingApproval(_ installed: [InstalledCameraExtension]) {
+        guard let bundledVersion else { return }
+        let candidates = installed.filter { !$0.isUninstalling && $0.version >= bundledVersion }
+        guard !candidates.isEmpty else { return }
+        switch CameraExtensionUpgradeAction.decide(bundled: bundledVersion, installed: candidates) {
+        case .approveInSettings:
+            verificationID = UUID()
+            state = .awaitingApproval
+        case .enableInSettings:
+            verificationID = UUID()
+            state = .disabled
+        case .verify:
+            guard state != .awaitingActivation else { return }
+            let id = UUID()
+            verificationID = id
+            state = .awaitingActivation
+            waitForActivation(id: id, remaining: 20)
+        default: break
+        }
+    }
+
+    private func waitForActivation(id: UUID, remaining: Int) {
+        schedule { [weak self] in
+            guard let self, self.verificationID == id, self.state == .awaitingActivation else { return }
+            if remaining > 1 { self.waitForActivation(id: id, remaining: remaining - 1) }
+            else { self.state = .unavailable }
+        }
     }
 
     func inspect(_ installed: [InstalledCameraExtension]) {
@@ -146,6 +243,8 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
         guard request === changeRequest else { return }
+        verificationID = UUID()
+        statusCheckError = nil
         state = .awaitingApproval
     }
 
@@ -159,6 +258,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
         guard request === changeRequest else { return }
         changeRequest = nil
+        statusCheckError = nil
         if result == .willCompleteAfterReboot { state = .restartRequired }
         else if removing { state = .removed; refreshCamera() }
         else { verify() }
@@ -186,7 +286,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func observeCameraStatus(_ status: VirtualCameraStatus) {
-        if (state == .verifying || state == .unavailable), status.isUsable {
+        if (state == .verifying || state == .unavailable), changeRequest == nil, status.isUsable {
             verificationID = UUID()
             state = .ready
             if didRestartForRecovery { recoveryDefaults.removeObject(forKey: Self.restartKey) }
@@ -197,8 +297,25 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
         guard request === changeRequest || request === propertiesRequest else { return }
+        if request === propertiesRequest {
+            let purpose = propertiesPurpose
+            propertiesRequest = nil
+            propertiesPurpose = nil
+            isCheckingStatus = false
+            if case .approval(let activation) = purpose {
+                if changeRequest === activation { statusCheckError = error.localizedDescription }
+                return
+            }
+            if case .recovery(let previous) = purpose {
+                if changeRequest == nil, state == previous { statusCheckError = error.localizedDescription }
+                return
+            }
+        }
         changeRequest = nil
         propertiesRequest = nil
+        propertiesPurpose = nil
+        isCheckingStatus = false
+        statusCheckError = nil
         verificationID = UUID()
         let failure = error as NSError
         let validation = failure.domain == OSSystemExtensionErrorDomain && [8, 9].contains(failure.code)
@@ -207,6 +324,10 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func openSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences")!)
+        if #available(macOS 15, *) {
+            SMAppService.openSystemSettingsLoginItems()
+        } else {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?General")!)
+        }
     }
 }

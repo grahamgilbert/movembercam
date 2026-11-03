@@ -24,8 +24,14 @@ enum CameraExtensionUpgradeAction: Equatable {
     static func decide(bundled: CameraExtensionVersion, installed: [InstalledCameraExtension]) -> Self {
         let active = installed.filter { !$0.isUninstalling }
         guard !active.isEmpty else { return installed.isEmpty ? .notInstalled : .restartMac }
-        if active.contains(where: { $0.isAwaitingApproval }) { return .approveInSettings }
-        guard let enabled = active.filter(\.isEnabled).max(by: { $0.version < $1.version }) else {
+        let enabled = active.filter(\.isEnabled).max(by: { $0.version < $1.version })
+        let pending = active.filter(\.isAwaitingApproval).max(by: { $0.version < $1.version })
+        if let pending {
+            if let enabled {
+                if pending.version >= enabled.version { return .approveInSettings }
+            } else { return .approveInSettings }
+        }
+        guard let enabled else {
             return .enableInSettings
         }
         return enabled.version < bundled ? .installUpdate : .verify
@@ -34,13 +40,31 @@ enum CameraExtensionUpgradeAction: Equatable {
 
 enum CameraExtensionUpdateState: Equatable {
     case unchecked, checking, notInstalled, installing, awaitingApproval, disabled
-    case verifying, ready, restartRequired, unavailable, removing, removed
+    case awaitingActivation, verifying, ready, restartRequired, unavailable, removing, removed
     case failed(String)
 
     var busy: Bool {
         switch self {
-        case .checking, .installing, .verifying, .removing: return true
+        case .checking, .installing, .awaitingActivation, .verifying, .removing: return true
         default: return false
+        }
+    }
+
+    var connectionSummary: String? {
+        switch self {
+        case .unchecked, .ready: return nil
+        case .notInstalled: return "Virtual camera not installed"
+        case .checking: return "Checking camera extension…"
+        case .installing: return "Updating virtual camera…"
+        case .awaitingApproval: return "Camera extension approval required"
+        case .disabled: return "Camera extension disabled"
+        case .awaitingActivation: return "Waiting for macOS activation"
+        case .verifying: return "Connecting virtual camera…"
+        case .restartRequired: return "Mac restart required"
+        case .unavailable: return "Virtual camera unavailable"
+        case .removing: return "Removing virtual camera…"
+        case .removed: return "Virtual camera removed"
+        case .failed: return "Camera extension setup failed"
         }
     }
 
@@ -49,8 +73,9 @@ enum CameraExtensionUpdateState: Equatable {
         case .unchecked, .notInstalled: return "Install the virtual camera to use MovemberCam in video apps."
         case .checking: return "Checking the installed camera extension…"
         case .installing: return "Updating the virtual camera…"
-        case .awaitingApproval: return "Approve MovemberCam in System Settings → General → Login Items & Extensions."
-        case .disabled: return "MovemberCam is disabled. Enable it in System Settings → General → Login Items & Extensions."
+        case .awaitingApproval: return "macOS is waiting for approval of MovemberCam Camera. " + CameraExtensionSettings.instructions()
+        case .disabled: return "macOS reports MovemberCam Camera is disabled. " + CameraExtensionSettings.instructions()
+        case .awaitingActivation: return "MovemberCam Camera is enabled. Waiting for macOS to finish activation…"
         case .verifying: return "Connecting the updated camera…"
         case .ready: return "Virtual camera ready."
         case .restartRequired: return "Restart your Mac to finish changing the camera extension."
@@ -59,6 +84,16 @@ enum CameraExtensionUpdateState: Equatable {
         case .removed: return "Virtual camera removed."
         case .failed(let message): return message
         }
+    }
+}
+
+enum CameraExtensionSettings {
+    static func instructions(macOSMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion) -> String {
+        if macOSMajorVersion < 15 {
+            return "In System Settings → Privacy & Security, allow MovemberCam’s system extension."
+        }
+        let category = macOSMajorVersion >= 26 ? " → By Category" : ""
+        return "In System Settings → General → Login Items & Extensions\(category) → Camera Extensions, enable MovemberCam Camera."
     }
 }
 
