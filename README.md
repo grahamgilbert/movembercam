@@ -28,6 +28,8 @@ MovemberCam supports built-in, USB, and Continuity cameras. Built-in cameras use
 
 After a camera extension update, MovemberCam retries connecting automatically. If macOS leaves only the app’s camera discovery stuck, it can briefly reopen itself once to finish recovery, preserving your edits and keeping Settings closed if it was closed. If recovery still fails, the menu bar warning and notification provide the next action.
 
+App-only updates keep the existing camera extension running. If macOS enables a changed camera extension but fails to start it, Settings offers **Repair Virtual Camera**. Repair resets its registration and macOS asks you to approve the camera again; MovemberCam then reconnects automatically.
+
 Settings also has **Open at Login**, automatic update preferences, and **Check for Updates…**. Opening Settings starts the camera for its preview. Launching at login keeps Settings hidden and leaves the camera off until a video app uses MovemberCam.
 
 To remove the virtual camera, close apps using MovemberCam and choose **Camera → Remove Virtual Camera**.

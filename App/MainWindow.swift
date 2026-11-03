@@ -243,6 +243,7 @@ struct MainWindow: View {
         case .install: installer.install()
         case .retry: installer.refresh()
         case .reconnect: installer.retryConnection()
+        case .repairRegistration: installer.repairRegistration()
         case .openSettings: installer.openSettings()
         case .restartApp: restartApp()
         case .none: break

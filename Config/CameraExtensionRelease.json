@@ -1,0 +1,13 @@
+{
+  "release": "1.0.9",
+  "build": "21",
+  "source_sha256": "fef9602338eab7707ddde42ee78d37ab05ea16445dd80aefa6ab6e9c14a2771e",
+  "inputs": [
+    "CameraExtension/CameraProvider.swift",
+    "CameraExtension/main.swift",
+    "Config/Extension-Info.plist",
+    "Config/Extension.entitlements",
+    "Shared/VideoFormat.swift",
+    "Shared/VideoFrameRenderer.swift"
+  ]
+}

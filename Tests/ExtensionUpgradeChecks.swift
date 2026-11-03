@@ -32,6 +32,7 @@ import SystemExtensions
             value.prepareForActivation = { [unowned self] completion in self.paused = true; completion() }
             value.reconnectCamera = { [unowned self] in self.reconnects += 1 }
             value.captureSuspensionChanged = { [unowned self] in self.suspensions.append($0) }
+            value.probeFreshCamera = { $0(.missing) }
             return value
         }()
         func drain() { while !ticks.isEmpty { ticks.removeFirst()() } }
@@ -124,11 +125,11 @@ import SystemExtensions
                   "Enabled background status checks cannot restart exhausted recovery or hide its failure")
         recovery.installer.request(recovery.requests[0], didFinishWithResult: .completed)
         try check(recovery.installer.state == .unavailable, "Stale request completions cannot overwrite recovery guidance")
-        try check(recovery.installer.recoveryAction == .reconnect && recovery.installer.offersAppRestart,
-                  "Unavailable camera exposes Retry Connection with app restart available as a fallback")
+        try check(recovery.installer.recoveryAction == .repairRegistration && !recovery.installer.offersAppRestart,
+                  "An enabled camera absent from a fresh process offers registration repair instead of a useless app restart")
         recovery.installer.noteAppRestart()
-        try check(recovery.installer.recoveryAction == .openSettings, "A previous app restart advances to one settings action")
-        try check(!recovery.installer.needsApproval && recovery.installer.message.contains("already enabled"),
+        try check(recovery.installer.recoveryAction == .repairRegistration, "A previous app restart cannot hide the required registration repair")
+        try check(!recovery.installer.needsApproval && recovery.installer.message.contains("enabled"),
                   "A failed connection after restart does not falsely claim camera permission is disabled")
         recovery.installer.observeCameraStatus(.idle(isInstalled: true))
         try check(recovery.installer.isReady && recovery.reconnects == 2,
@@ -148,6 +149,7 @@ import SystemExtensions
         try check(sinkFailure.installer.isReady, "A late successful sink connection still recovers after the retry budget is exhausted")
         try checkApprovalRecovery()
         try checkAutomaticDiscoveryRecovery()
+        try checkRegistrationRepair()
         print("\(checks) extension upgrade checks passed")
     }
 
@@ -164,7 +166,7 @@ import SystemExtensions
         defer { defaults.removePersistentDomain(forName: suite) }
         let stale = Harness(defaults: defaults)
         var probes = 0, restarts = 0
-        stale.installer.probeFreshCamera = { probes += 1; $0(true) }
+        stale.installer.probeFreshCamera = { probes += 1; $0(.available) }
         stale.installer.restartForStaleDiscovery = { restarts += 1; return true }
         exhaust(stale)
         try check(probes == 1 && restarts == 1,
@@ -173,26 +175,31 @@ import SystemExtensions
                   "An automatic relaunch that never exits still ends in an actionable bounded failure")
         stale.installer.observeCameraStatus(.idle(isInstalled: true))
         let nextProcess = Harness(defaults: defaults)
-        nextProcess.installer.probeFreshCamera = { probes += 1; $0(true) }
+        nextProcess.installer.probeFreshCamera = { probes += 1; $0(.available) }
         nextProcess.installer.restartForStaleDiscovery = { restarts += 1; return true }
         exhaust(nextProcess)
-        try check(probes == 1 && restarts == 1 && nextProcess.installer.state == .unavailable,
+        try check(probes == 2 && restarts == 1 && nextProcess.installer.state == .unavailable,
                   "The automatic relaunch budget survives a successful connection and a new process without looping")
 
         let unavailable = Harness()
-        unavailable.installer.probeFreshCamera = { $0(false) }
+        unavailable.installer.probeFreshCamera = { $0(.missing) }
         unavailable.installer.restartForStaleDiscovery = { restarts += 1; return true }
         exhaust(unavailable)
         try check(restarts == 1 && unavailable.installer.state == .unavailable,
                   "A camera missing from a fresh process does not trigger an unnecessary app relaunch")
+        let inconclusive = Harness()
+        inconclusive.installer.probeFreshCamera = { $0(.failed) }
+        exhaust(inconclusive)
+        try check(inconclusive.installer.recoveryAction == .reconnect,
+                  "A probe timeout, crash, or query error cannot claim the camera is missing or offer registration removal")
 
         let late = Harness()
-        var reply: ((Bool) -> Void)?
+        var reply: ((CameraDiscoveryProbe.Result) -> Void)?
         late.installer.probeFreshCamera = { reply = $0 }
         late.installer.restartForStaleDiscovery = { restarts += 1; return true }
         exhaust(late)
         late.installer.observeCameraStatus(.sending)
-        reply?(true)
+        reply?(.available)
         try check(restarts == 1 && late.installer.isReady,
                   "Late fresh-process probe results cannot restart an already recovered camera")
 
@@ -200,40 +207,106 @@ import SystemExtensions
         duplicate.installer.probeFreshCamera = { reply = $0 }
         duplicate.installer.restartForStaleDiscovery = { restarts += 1; return true }
         exhaust(duplicate)
-        reply?(true)
-        reply?(true)
+        reply?(.available)
+        reply?(.available)
         try check(restarts == 2, "Duplicate probe callbacks cannot request two automatic relaunches")
         duplicate.drain()
 
         let sink = Harness()
-        sink.installer.probeFreshCamera = { probes += 1; $0(true) }
+        sink.installer.probeFreshCamera = { probes += 1; $0(.available) }
         sink.installer.restartForStaleDiscovery = { restarts += 1; return true }
         sink.installer.install()
         sink.installer.request(sink.requests.last!, didFinishWithResult: .completed)
         sink.installer.observeCameraStatus(.cannotStart(-4))
         sink.drain()
-        try check(probes == 1 && restarts == 2 && sink.installer.state == .unavailable,
+        try check(probes == 2 && restarts == 2 && sink.installer.state == .unavailable,
                   "An ordinary sink error does not run a fresh probe or restart the app")
 
         let refused = Harness()
-        refused.installer.probeFreshCamera = { $0(true) }
+        refused.installer.probeFreshCamera = { $0(.available) }
         refused.installer.restartForStaleDiscovery = { false }
         exhaust(refused)
         try check(refused.installer.state == .unavailable && !refused.installer.busy,
                   "An automatic restart that cannot launch leaves visible recovery actions")
 
         let existing = Harness()
-        existing.installer.probeFreshCamera = { probes += 1; $0(true) }
+        existing.installer.probeFreshCamera = { probes += 1; $0(.available) }
         existing.installer.restartForStaleDiscovery = { restarts += 1; return true }
         existing.installer.inspect([entry()])
         existing.drain()
-        try check(probes == 1 && restarts == 2,
+        try check(probes == 2 && restarts == 2,
                   "Startup discovery does not automatically restart before completing registration recovery")
         existing.installer.request(existing.requests.last!, didFinishWithResult: .completed)
         existing.drain()
         // A registration retry itself is a completed activation, so this case
         // exercises the same guard as a newly installed but unavailable camera.
         try check(restarts == 3, "A completed registration retry can recover stale startup discovery")
+    }
+
+    static func checkRegistrationRepair() throws {
+        func missingCamera() -> Harness {
+            let h = Harness()
+            h.installer.install()
+            h.installer.request(h.requests.last!, didFinishWithResult: .completed)
+            h.drain()
+            h.installer.request(h.requests.last!, didFinishWithResult: .completed)
+            h.drain()
+            return h
+        }
+        let unchanged = Harness()
+        unchanged.installer.inspect([entry()])
+        unchanged.installer.observeCameraStatus(.idle(isInstalled: true))
+        unchanged.drain()
+        try check(unchanged.installer.isReady && unchanged.requests.isEmpty,
+                  "An app update with the same bundled camera version leaves the working extension installed")
+
+        let h = missingCamera()
+        try check(h.installer.recoveryAction == .repairRegistration && h.installer.message.contains("approve"),
+                  "A missing provider clearly explains the repair and renewed macOS approval")
+        h.installer.repairRegistration()
+        h.installer.repairRegistration()
+        try check(h.requests.count == 3 && h.installer.blocksCapture && h.installer.busy,
+                  "Registration repair pauses capture and starts exactly one removal")
+        let removal = h.requests.last!
+        h.installer.request(removal, didFinishWithResult: .completed)
+        for _ in 0..<3 { h.ticks.removeFirst()() }
+        try check(h.requests.count == 3,
+                  "Repair never submits replacement activation back-to-back with the old launch-job removal")
+        h.ticks.removeFirst()()
+        try check(h.requests.count == 4 && h.installer.state == .installing,
+                  "After the removal settling period, repair submits a fresh activation")
+        let activation = h.requests.last!
+        h.installer.requestNeedsUserApproval(activation)
+        try check(h.installer.state == .awaitingApproval && h.installer.recoveryAction == .openSettings,
+                  "Renewed approval is shown as a real macOS approval step with an actionable Settings button")
+        h.installer.request(activation, didFinishWithResult: .completed)
+        h.installer.observeCameraStatus(.sending)
+        h.drain()
+        try check(h.installer.isReady && h.requests.count == 4,
+                  "Approved repaired registration recovers without another removal or activation loop")
+
+        let reboot = missingCamera()
+        reboot.installer.repairRegistration()
+        reboot.installer.request(reboot.requests.last!, didFinishWithResult: .willCompleteAfterReboot)
+        reboot.drain()
+        try check(reboot.installer.state == .restartRequired && reboot.requests.count == 3 &&
+                  reboot.installer.message.contains("Restart your Mac"),
+                  "A real reboot-required removal never attempts fresh activation or leaves a repair spinner")
+
+        let failed = missingCamera()
+        failed.installer.repairRegistration()
+        failed.installer.request(failed.requests.last!, didFailWithError: NSError(domain: "RepairRemoval", code: 1))
+        failed.drain()
+        try check(!failed.installer.busy && !failed.installer.blocksCapture && failed.requests.count == 3,
+                  "A refused repair removal ends progress and never submits activation")
+
+        let quitting = missingCamera()
+        quitting.installer.repairRegistration()
+        quitting.installer.request(quitting.requests.last!, didFinishWithResult: .completed)
+        quitting.installer.stopRecovery()
+        quitting.drain()
+        try check(quitting.requests.count == 3,
+                  "Quitting during the settling period cancels delayed reactivation")
     }
 
     static func entry(_ build: String = "10", enabled: Bool = true, approval: Bool = false) -> InstalledCameraExtension {

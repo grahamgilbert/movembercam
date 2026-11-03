@@ -109,6 +109,7 @@ fi
 
 [[ -d "$app_path" ]] || { printf 'App not found: %s\n' "$app_path" >&2; exit 1; }
 python3 Scripts/verify-app-resources.py "$app_path"
+python3 Scripts/verify-extension-version.py --app "$app_path"
 codesign --verify --deep --strict "$app_path"
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")"
 app_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"

@@ -102,7 +102,7 @@ final class CameraAttentionController: ObservableObject {
     var canRecover: Bool {
         guard let issue, let model, let installer else { return false }
         switch issue.recovery {
-        case .installExtension, .retryExtension: return !installer.busy
+        case .installExtension, .retryExtension, .repairExtension: return !installer.busy
         case .requestCameraAccess, .retryCapture, .restartApp: return !model.isBusy
         default: return true
         }
@@ -113,6 +113,7 @@ final class CameraAttentionController: ObservableObject {
         switch issue.recovery {
         case .extensionSettings: installer.openSettings()
         case .installExtension: installer.install()
+        case .repairExtension: installer.repairRegistration()
         case .retryExtension:
             if installer.state == .unavailable { installer.retryConnection() }
             else { installer.refresh() }
@@ -126,6 +127,7 @@ final class CameraAttentionController: ObservableObject {
 
     func prepareForTermination() {
         stopped = true
+        installer?.stopRecovery()
         deliveryTask?.cancel()
     }
 

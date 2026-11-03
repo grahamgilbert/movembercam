@@ -1,0 +1,83 @@
+diff --git a/Tests/SUInstallerTest.m b/Tests/SUInstallerTest.m
+index fce79889a..e426f16b1 100644
+--- a/Tests/SUInstallerTest.m
++++ b/Tests/SUInstallerTest.m
+@@ -11,6 +11,7 @@
+ #import "SUHost.h"
+ #import "SUInstaller.h"
+ #import "SUInstallerProtocol.h"
++#import "SUPlainInstaller.h"
+ #import "SPUInstallationType.h"
+ #import <unistd.h>
+ 
+@@ -20,6 +21,70 @@
+ 
+ @implementation SUInstallerTest
+ 
++- (void)checkCameraBundleReplacementWithFallback:(BOOL)fallback changedCamera:(BOOL)changedCamera downgrade:(BOOL)downgrade
++{
++    NSFileManager *fm = NSFileManager.defaultManager;
++    NSURL *root = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:NSUUID.UUID.UUIDString]];
++    NSURL *oldApp = [root URLByAppendingPathComponent:@"Installed/CameraFixture.app"];
++    NSURL *newApp = [root URLByAppendingPathComponent:@"Update/CameraFixture.app"];
++    NSString *cameraPath = @"Contents/Library/SystemExtensions/Camera.systemextension/Contents";
++    for (NSURL *app in @[oldApp, newApp]) {
++        BOOL isNew = [app isEqual:newApp];
++        NSURL *camera = [app URLByAppendingPathComponent:cameraPath];
++        XCTAssertTrue([fm createDirectoryAtURL:camera withIntermediateDirectories:YES attributes:nil error:NULL]);
++        NSMutableDictionary *info = [@{@"CFBundleIdentifier": @"org.sparkle-project.CameraFixture", @"CFBundleName": @"CameraFixture",
++            @"CFBundlePackageType": @"APPL", @"CFBundleVersion": isNew ? (downgrade ? @"0" : @"2") : @"1"} mutableCopy];
++        if (fallback && isNew) info[@"NSUpdateSecurityPolicy"] = @{};
++        XCTAssertTrue([info writeToURL:[app URLByAppendingPathComponent:@"Contents/Info.plist"] atomically:YES]);
++        NSString *cameraVersion = isNew && changedCamera ? @"22" : @"21";
++        NSDictionary *cameraInfo = @{@"CFBundleIdentifier": @"org.sparkle-project.CameraFixture.Camera", @"CFBundleVersion": cameraVersion};
++        XCTAssertTrue([cameraInfo writeToURL:[camera URLByAppendingPathComponent:@"Info.plist"] atomically:YES]);
++        XCTAssertTrue([[cameraVersion dataUsingEncoding:NSUTF8StringEncoding]
++            writeToURL:[camera URLByAppendingPathComponent:@"driver-payload"] atomically:YES]);
++    }
++    SUHost *host = [[SUHost alloc] initWithBundle:[NSBundle bundleWithURL:oldApp]];
++    SUPlainInstaller *installer = [[SUPlainInstaller alloc] initWithHost:host bundlePath:newApp.path installationPath:oldApp.path];
++    NSError *error = nil;
++    BOOL initial = [installer performInitialInstallation:&error];
++    if (downgrade) {
++        XCTAssertFalse(initial);
++        XCTAssertNotNil(error);
++    } else {
++        XCTAssertTrue(initial, @"%@", error);
++        XCTAssertEqualObjects([installer valueForKey:@"canPerformSafeAtomicSwap"], @(!fallback));
++        XCTAssertTrue([installer performFinalInstallationProgressBlock:nil error:&error], @"%@", error);
++    }
++    NSDictionary *installed = [NSDictionary dictionaryWithContentsOfURL:[oldApp URLByAppendingPathComponent:@"Contents/Info.plist"]];
++    XCTAssertEqualObjects(installed[@"CFBundleVersion"], downgrade ? @"1" : @"2");
++    NSURL *camera = [oldApp URLByAppendingPathComponent:cameraPath];
++    NSString *expected = changedCamera && !downgrade ? @"22" : @"21";
++    NSDictionary *cameraInfo = [NSDictionary dictionaryWithContentsOfURL:[camera URLByAppendingPathComponent:@"Info.plist"]];
++    XCTAssertEqualObjects(cameraInfo[@"CFBundleVersion"], expected);
++    XCTAssertEqualObjects([NSData dataWithContentsOfURL:[camera URLByAppendingPathComponent:@"driver-payload"]], [expected dataUsingEncoding:NSUTF8StringEncoding]);
++    [installer performCleanup];
++    XCTAssertTrue([fm removeItemAtURL:root error:NULL]);
++}
++
++- (void)testAtomicAppReplacementKeepsUnchangedCameraPayload
++{
++    [self checkCameraBundleReplacementWithFallback:NO changedCamera:NO downgrade:NO];
++}
++
++- (void)testAtomicAppReplacementIncludesUpdatedCameraPayload
++{
++    [self checkCameraBundleReplacementWithFallback:NO changedCamera:YES downgrade:NO];
++}
++
++- (void)testFallbackAppReplacementKeepsUnchangedCameraPayload
++{
++    [self checkCameraBundleReplacementWithFallback:YES changedCamera:NO downgrade:NO];
++}
++
++- (void)testRejectedDowngradeLeavesInstalledCameraPayloadIntact
++{
++    [self checkCameraBundleReplacementWithFallback:NO changedCamera:YES downgrade:YES];
++}
++
+ - (void)setUp
+ {
+     [super setUp];
