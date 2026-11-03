@@ -29,7 +29,11 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         } else { message = state.message }
         return statusCheckError.map { message + " Couldn’t recheck macOS status: " + $0 } ?? message
     }
-    var recoveryAction: CameraExtensionRecoveryAction { state.recoveryAction(afterAppRestart: didRestartForRecovery) }
+    var recoveryAction: CameraExtensionRecoveryAction {
+        if state == .unavailable && changeRequest != nil { return .restartApp }
+        return state.recoveryAction(afterAppRestart: didRestartForRecovery)
+    }
+    var offersAppRestart: Bool { state == .unavailable && !didRestartForRecovery && changeRequest == nil }
     var recoveryEnabled: Bool {
         recoveryAction != .none && (!busy || recoveryAction == .openSettings ||
             (state == .unavailable && recoveryAction == .restartApp))
@@ -145,6 +149,14 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
                     "macOS did not respond to the camera status check. Try again or restart MovemberCam."))
             }
         }
+    }
+
+    func retryConnection() {
+        guard canInstall, !busy, state == .unavailable else { return }
+        recoveryAttempts = 0
+        Self.logger.notice("User requested connection recovery")
+        if !lastCameraStatus.isInstalled || lastCameraStatus == .requiresUpdate { activate() }
+        else { verify(resetConnection: true) }
     }
 
     func install() {

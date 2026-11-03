@@ -73,7 +73,8 @@ struct CameraAttentionSnapshot {
                 message: message, recovery: .retryExtension)
         case .unavailable:
             return CameraAttentionIssue(kind: .extensionFailure, title: "Virtual camera is unavailable",
-                message: message, recovery: extensionRecovery == .openSettings ? .extensionSettings : .restartApp)
+                message: message, recovery: extensionRecovery == .openSettings ? .extensionSettings :
+                    extensionRecovery == .reconnect ? .retryExtension : .restartApp)
         case .restartRequired:
             return CameraAttentionIssue(kind: .restartRequired, title: "Camera extension needs a Mac restart",
                 message: message, recovery: .showSettings)
