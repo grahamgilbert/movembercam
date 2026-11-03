@@ -16,14 +16,15 @@ final class CameraAttentionController: ObservableObject {
     }
     private let notifications: CameraIssueNotifying
     private let defaults: UserDefaults
-    private static let deliveredKey = "MovemberCam.deliveredCameraIssues"
+    // 1.0.4 could record a delivered notification whose foreground banner was
+    // suppressed. Allow one corrected alert for an unresolved issue after upgrading.
+    private static let deliveredKey = "MovemberCam.deliveredCameraIssues.v2"
     private var policy: CameraAttentionNotificationPolicy
     private var subscriptions: Set<AnyCancellable> = []
     private weak var model: AppModel?
     private weak var installer: ExtensionInstaller?
     private var restartApp: (() -> Void)?
     private var deliveryTask: Task<Void, Never>?
-    private var settingsVisible = true
     private var pendingShowSettings = false
     private var stopped = false
     private var isWorking = false
@@ -37,7 +38,7 @@ final class CameraAttentionController: ObservableObject {
         notifications.onOpenSettings = { [weak self] in self?.showSettings() }
         notifications.shouldPresent = { [weak self] kind in
             guard let self else { return false }
-            return !self.stopped && !self.settingsVisible && !self.isWorking && self.issue?.kind == kind
+            return !self.stopped && !self.isWorking && self.issue?.kind == kind
         }
     }
 
@@ -73,6 +74,11 @@ final class CameraAttentionController: ObservableObject {
                 guard let self else { return }
                 self.model?.refreshCameras()
                 if self.installer?.offersStatusCheck == true { self.installer?.refresh() }
+                if self.notificationsAvailable == false, let issue = self.issue {
+                    // Check again after a visit to macOS notification settings.
+                    self.policy.retryUnsent(issue.kind)
+                    self.refresh()
+                }
             }.store(in: &subscriptions)
         // Approval can change while another app, such as Zoom, stays in front.
         Timer.publish(every: 5, on: .main, in: .common).autoconnect().sink { [weak self] _ in
@@ -85,14 +91,6 @@ final class CameraAttentionController: ObservableObject {
     private func recheckPendingApproval() {
         guard !stopped, let installer, installer.offersStatusCheck, !installer.isCheckingStatus else { return }
         installer.refresh()
-    }
-
-    func setSettingsVisible(_ visible: Bool) {
-        guard visible != settingsVisible else { return }
-        settingsVisible = visible
-        if visible { notifications.clear() }
-        else { policy.settingsClosed() }
-        refresh()
     }
 
     func showSettings() {
@@ -152,21 +150,21 @@ final class CameraAttentionController: ObservableObject {
             }
         }
         guard deliveryTask == nil,
-              let next = policy.next(issue: issue, settingsVisible: settingsVisible, isWorking: isWorking) else { return }
+              let next = policy.next(issue: issue, isWorking: isWorking) else { return }
         deliveryTask = Task { [weak self] in
             guard let self else { return }
             defer { self.deliveryTask = nil; self.refresh() }
             let authorized = await self.notifications.authorize()
             self.notificationsAvailable = authorized
             guard authorized else { return }
-            guard !Task.isCancelled, !self.stopped, !self.settingsVisible, !self.isWorking,
+            guard !Task.isCancelled, !self.stopped, !self.isWorking,
                   self.issue?.kind == next.kind else {
                 self.policy.retryUnsent(next.kind)
                 return
             }
             do {
                 try await self.notifications.deliver(self.issue ?? next)
-                guard !Task.isCancelled, !self.stopped, !self.settingsVisible, !self.isWorking,
+                guard !Task.isCancelled, !self.stopped, !self.isWorking,
                       self.issue?.kind == next.kind else {
                     self.notifications.clear()
                     self.policy.retryUnsent(next.kind)

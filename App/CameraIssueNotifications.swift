@@ -29,9 +29,12 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
     }
 
     func authorize() async -> Bool {
-        switch await center.notificationSettings().authorizationStatus {
-        case .authorized, .provisional: return true
-        case .notDetermined: return (try? await center.requestAuthorization(options: [.alert])) ?? false
+        let settings = await center.notificationSettings()
+        switch settings.authorizationStatus {
+        case .authorized: return settings.alertSetting == .enabled
+        case .notDetermined, .provisional:
+            guard (try? await center.requestAuthorization(options: [.alert])) == true else { return false }
+            return await center.notificationSettings().alertSetting == .enabled
         default: return false
         }
     }

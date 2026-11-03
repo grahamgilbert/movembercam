@@ -45,8 +45,11 @@ import SystemExtensions
         lazy var installer = ExtensionInstaller(bundledVersion: CameraExtensionVersion(release: "1.0.4", build: "16"),
             canInstall: true, submit: { [unowned self] in self.requests.append($0) }, schedule: { _ in },
             recoveryDefaults: defaults)
-        init() {
+        init(previouslySuppressedAlert: Bool = false) {
             defaults = UserDefaults(suiteName: suite)!
+            if previouslySuppressedAlert {
+                defaults.set(["extensionPermission"], forKey: "MovemberCam.deliveredCameraIssues")
+            }
             model = AppModel(defaults: defaults, cameraAuthorization: { .authorized })
             engine = CameraEngine.latest!
             attention = CameraAttentionController(notifications: notifications, defaults: defaults)
@@ -71,33 +74,37 @@ import SystemExtensions
     }
 
     static func run() async throws {
-        let h = Harness()
+        let h = Harness(previouslySuppressedAlert: true)
         defer { h.close() }
+        h.model.setPreviewVisible(true)
+        await settle()
+        h.engine.finishStart()
+        await settle()
         h.bind()
         h.approve(false)
         await settle()
-        try check(h.attention.issue?.kind == .extensionPermission && h.notifications.delivered.isEmpty,
-                  "Visible Settings explains approval without sending a duplicate notification")
-        h.attention.setSettingsVisible(false)
+        try check(h.model.isRunning && h.attention.issue?.kind == .extensionPermission && h.notifications.delivered.count == 1,
+                  "Approval sends a notification even while the Settings preview is running")
+        try check(h.notifications.delivered.count == 1,
+                  "A suppressed 1.0.4 banner does not prevent the corrected alert after upgrading")
+        h.model.setPreviewVisible(false)
         await settle()
-        try check(h.notifications.delivered.count == 1, "Closing Settings sends one actionable approval warning")
+        try check(h.notifications.delivered.count == 1, "Closing Settings does not repeat an existing alert")
         try check(h.notifications.shouldPresent?(.extensionPermission) == true,
                   "Background issue remains eligible for a notification banner")
         for _ in 0..<3 { h.installer.refresh(); h.approve(false); h.model.refreshCameras() }
         await settle()
         try check(h.notifications.delivered.count == 1, "Repeated status updates do not spam notifications")
         let relaunched = CameraAttentionController(notifications: FakeCameraNotifications(), defaults: h.defaults)
-        try check(h.defaults.stringArray(forKey: "MovemberCam.deliveredCameraIssues") == ["extensionPermission"],
+        try check(h.defaults.stringArray(forKey: "MovemberCam.deliveredCameraIssues.v2") == ["extensionPermission"],
                   "Delivered warning is persisted across app restarts")
         relaunched.prepareForTermination()
         var opened = 0
         h.notifications.onOpenSettings?()
         h.attention.onShowSettings = { opened += 1 }
         try check(opened == 1, "A notification tap before window setup opens Settings once setup completes")
-        h.attention.setSettingsVisible(true)
-        try check(h.notifications.shouldPresent?(.extensionPermission) == false,
-                  "Visible Settings suppresses banner presentation")
-        h.attention.setSettingsVisible(false)
+        try check(h.notifications.shouldPresent?(.extensionPermission) == true,
+                  "Opening Settings from a notification does not suppress its banner")
         h.installer.refresh(); h.approve(true)
         await settle()
         try check(h.attention.issue?.title == "Camera recovery in progress",
@@ -106,12 +113,12 @@ import SystemExtensions
         await settle()
         try check(h.installer.isReady && h.attention.issue == nil && h.notifications.clears > 0,
                   "Verified camera recovery clears the warning and its notification")
-        try check(h.defaults.stringArray(forKey: "MovemberCam.deliveredCameraIssues") == [],
+        try check(h.defaults.stringArray(forKey: "MovemberCam.deliveredCameraIssues.v2") == [],
                   "Recovery allows a future incident to notify again")
         h.installer.inspect([InstalledCameraExtension(version: CameraExtensionVersion(release: "1.0.4", build: "16"),
             isEnabled: false, isAwaitingApproval: true, isUninstalling: false)])
         await settle()
-        try check(h.notifications.delivered.count == 2, "A new incident after recovery sends a new warning")
+        try check(h.notifications.delivered.count == 2, "A new incident with Settings closed sends a background warning after recovery")
 
         let beforeRecheck = h.requests.count
         try? await Task.sleep(nanoseconds: 5_100_000_000)
@@ -125,16 +132,26 @@ import SystemExtensions
         let denied = Harness()
         defer { denied.close() }
         denied.notifications.authorized = false
-        denied.bind(); denied.approve(false); denied.attention.setSettingsVisible(false)
+        denied.bind(); denied.approve(false)
         await settle(); denied.model.refreshCameras(); await settle()
         try check(denied.attention.issue != nil && denied.attention.notificationsAvailable == false &&
                   denied.notifications.authorizationCalls == 1 && denied.notifications.delivered.isEmpty,
                   "Denied notifications keep the visible warning without a permission retry loop")
 
+        denied.notifications.authorized = true
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        await settle()
+        try check(denied.notifications.delivered.count == 1,
+                  "Enabling alerts after denial notifies for the unresolved issue on returning to the app")
+        NotificationCenter.default.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        await settle()
+        try check(denied.notifications.delivered.count == 1,
+                  "Refocusing the app does not repeat the newly permitted alert")
+
         let race = Harness()
         defer { race.close() }
         race.notifications.holdAuthorization = true
-        race.bind(); race.approve(false); race.attention.setSettingsVisible(false)
+        race.bind(); race.approve(false)
         await settle()
         await race.ready()
         race.notifications.authorization?.resume(returning: true)
@@ -145,7 +162,7 @@ import SystemExtensions
         let failure = Harness()
         defer { failure.close() }
         failure.notifications.failDelivery = true
-        failure.bind(); failure.approve(false); failure.attention.setSettingsVisible(false)
+        failure.bind(); failure.approve(false)
         await settle(); failure.model.refreshCameras(); await settle()
         try check(failure.notifications.authorizationCalls == 1 && failure.attention.issue != nil,
                   "Notification delivery failure leaves recovery visible without retrying endlessly")

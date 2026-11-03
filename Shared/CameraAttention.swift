@@ -102,8 +102,8 @@ struct CameraAttentionNotificationPolicy {
 
     init(delivered: Set<CameraAttentionIssue.Kind> = []) { self.delivered = delivered }
 
-    mutating func next(issue: CameraAttentionIssue?, settingsVisible: Bool, isWorking: Bool) -> CameraAttentionIssue? {
-        guard let issue, !settingsVisible, !isWorking,
+    mutating func next(issue: CameraAttentionIssue?, isWorking: Bool) -> CameraAttentionIssue? {
+        guard let issue, !isWorking,
               !delivered.contains(issue.kind), !attempted.contains(issue.kind) else { return nil }
         attempted.insert(issue.kind)
         return issue
@@ -111,6 +111,5 @@ struct CameraAttentionNotificationPolicy {
 
     mutating func didDeliver(_ kind: CameraAttentionIssue.Kind) { delivered.insert(kind) }
     mutating func retryUnsent(_ kind: CameraAttentionIssue.Kind) { attempted.remove(kind) }
-    mutating func settingsClosed() { attempted = delivered }
     mutating func recovered() { delivered.removeAll(); attempted.removeAll() }
 }
