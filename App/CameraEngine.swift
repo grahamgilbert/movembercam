@@ -9,6 +9,7 @@ struct CameraChoice: Identifiable, Equatable {
 final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onPreview: (@MainActor (CMSampleBuffer) -> Void)?
     var onOutputStatus: ((VirtualCameraStatus) -> Void)?
+    var onDemand: ((Bool) -> Void)?
     var onFailure: ((String) -> Void)?
 
     private let session = AVCaptureSession()
@@ -30,6 +31,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
         compositor = try FrameCompositor(configuration: configuration, logo: logo)
         super.init()
         virtualCamera.onStatus = { [weak self] status in self?.onOutputStatus?(status) }
+        virtualCamera.onDemand = { [weak self] needed in self?.onDemand?(needed) }
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionRuntimeError,
             object: session, queue: nil) { [weak self] notification in
                 let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error
@@ -37,7 +39,7 @@ final class CameraEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate
             })
         observers.append(NotificationCenter.default.addObserver(forName: .AVCaptureSessionWasInterrupted,
             object: session, queue: nil) { [weak self] _ in
-                self?.onFailure?("The camera was interrupted. Try starting it again.")
+                self?.onFailure?("The camera was interrupted. Reopen MovemberCam in your video app to try again.")
             })
     }
 

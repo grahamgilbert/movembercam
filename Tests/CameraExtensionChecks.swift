@@ -53,6 +53,31 @@ enum CameraExtensionChecks {
         try select(0, on: sink)
         try check(source.activeFormat == .hd720, "Switching back to a 720p camera resets source and sink")
         try checkQRControl(camera, sink: sink, source: source)
+        try checkDemand(source: source, sink: sink)
+    }
+
+    static func checkDemand(source: CameraStream, sink: CameraStream) throws {
+        func demand() throws -> String? {
+            try source.streamProperties(forProperties: [CameraStreamDemand.property])
+                .propertiesDictionary[CameraStreamDemand.property]?.value as? String
+        }
+        try check(source.availableProperties.contains(CameraStreamDemand.property) &&
+                  !sink.availableProperties.contains(CameraStreamDemand.property), "Only meeting output exposes camera demand")
+        try check(try demand() == "0", "Idle virtual camera does not request physical capture")
+        try source.startStream()
+        try source.startStream()
+        try check(try demand() == "1", "Meeting consumers request physical capture without an app writer")
+        try source.stopStream()
+        try check(try demand() == "1", "Capture stays requested while another consumer remains")
+        try source.stopStream()
+        try check(try demand() == "0", "Last consumer releases physical capture")
+        try source.stopStream()
+        try check(try demand() == "0", "Extra stop cannot make demand negative")
+        let write = CMIOExtensionStreamProperties(dictionary: [CameraStreamDemand.property:
+            CMIOExtensionPropertyState<AnyObject>(value: "1" as NSString)])
+        var rejected = false
+        do { try source.setStreamProperties(write) } catch { rejected = true }
+        try check(try rejected && demand() == "0", "Clients cannot write their own demand state")
     }
 
     static func checkQRControl(_ camera: CameraDevice, sink: CameraStream, source: CameraStream) throws {

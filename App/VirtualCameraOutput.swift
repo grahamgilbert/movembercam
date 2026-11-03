@@ -4,6 +4,7 @@ import Foundation
 /// CoreMediaIO work runs on its own serial queue. Capture hands off just the latest frame.
 final class VirtualCameraOutput {
     var onStatus: ((VirtualCameraStatus) -> Void)?
+    var onDemand: ((Bool) -> Void)?
     private let worker = DispatchQueue(label: "MovemberCam.virtualOutput", qos: .userInitiated)
     private let lock = NSLock()
     private var pending: CMSampleBuffer?
@@ -17,6 +18,8 @@ final class VirtualCameraOutput {
     private var didSendQRCode = false
     private var lastProbe: CFAbsoluteTime = 0
     private var deviceListener: CMIOObjectPropertyListenerBlock?
+    private var demandTimer: DispatchSourceTimer?
+    private var requested: Bool?
     private var status = VirtualCameraStatus.idle(isInstalled: false) {
         didSet { if status != oldValue { onStatus?(status) } }
     }
@@ -29,9 +32,17 @@ final class VirtualCameraOutput {
         deviceListener = listener
         var property = address(kCMIOHardwarePropertyDevices)
         CMIOObjectAddPropertyListenerBlock(CMIOObjectID(kCMIOObjectSystemObject), &property, worker, listener)
+        // Observe even while capture and the sink are stopped. Polling also recovers
+        // missed notifications and discovers a replacement extension after an update.
+        let timer = DispatchSource.makeTimerSource(queue: worker)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(500))
+        timer.setEventHandler { [weak self] in self?.refreshDemandOnWorker() }
+        demandTimer = timer
+        timer.resume()
     }
 
     deinit {
+        demandTimer?.cancel()
         if let deviceListener {
             var property = address(kCMIOHardwarePropertyDevices)
             CMIOObjectRemovePropertyListenerBlock(CMIOObjectID(kCMIOObjectSystemObject), &property, worker, deviceListener)
@@ -54,13 +65,40 @@ final class VirtualCameraOutput {
 
     private func refreshAvailabilityOnWorker() {
         let devices = matchingDeviceIDs()
+        let supportsDemand = refreshDemandOnWorker(force: true)
         if bufferQueue != nil {
             if devices.contains(device) { status = .sending } else { stopOnWorker() }
         } else {
-            status = devices.isEmpty ? .notInstalled : .idle(isInstalled: true)
+            status = devices.isEmpty ? .notInstalled : supportsDemand ? .idle(isInstalled: true) : .requiresUpdate
         }
         // Also deliver unchanged snapshots after AppModel attaches its observer.
         onStatus?(status)
+    }
+
+    @discardableResult
+    private func refreshDemandOnWorker(force: Bool = false) -> Bool {
+        let devices = matchingDeviceIDs()
+        var needed = false
+        var supportsDemand = false
+        for id in devices {
+            let sources = objectIDs(id, selector: kCMIODevicePropertyStreams, scope: kCMIODevicePropertyScopeInput)
+            for source in sources {
+                var property = address(Int(CameraStreamDemand.selector))
+                guard CMIOObjectHasProperty(source, &property) else { continue }
+                supportsDemand = true
+                var value: Unmanaged<CFString>?
+                var used: UInt32 = 0
+                let result = CMIOObjectGetPropertyData(source, &property, 0, nil,
+                    UInt32(MemoryLayout.size(ofValue: value)), &used, &value)
+                if result == noErr, let value = value?.takeRetainedValue(), value as String == "1" { needed = true }
+            }
+        }
+        if !devices.isEmpty && !supportsDemand { status = .requiresUpdate }
+        if force || requested != needed {
+            requested = needed
+            onDemand?(needed)
+        }
+        return supportsDemand
     }
 
     private func processLatest() {

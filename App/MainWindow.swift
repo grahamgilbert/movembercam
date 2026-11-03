@@ -20,6 +20,8 @@ struct MainWindow: View {
         .onAppear {
             location.checkLocation()
             installer.prepareForActivation = model.prepareForExtensionUpdate
+            installer.captureSuspensionChanged = model.setCaptureSuspended
+            model.setCaptureSuspended(installer.blocksCapture)
             installer.refreshCamera = model.refreshCameras
             installer.checkForUpgrade()
         }
@@ -53,14 +55,16 @@ struct MainWindow: View {
                 }
                 .buttonStyle(.bordered)
                 .fixedSize()
-                Button(action: model.performCameraAction) {
-                    Text(model.cameraControls.title)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                if model.cameraControls.action != nil {
+                    Button(action: model.performCameraAction) {
+                        Text(model.cameraControls.title)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.bordered)
+                    .fixedSize()
+                    .disabled(!model.cameraControls.isEnabled)
                 }
-                .buttonStyle(.bordered)
-                .fixedSize()
-                .disabled(!model.cameraControls.isEnabled || (installer.blocksCapture && model.cameraControls.action == .start))
             }
         }
     }
@@ -73,7 +77,9 @@ struct MainWindow: View {
                     ForEach(model.cameras) { Text($0.name).tag($0.id) }
                 }
                 .disabled(model.isBusy)
-                Button("Refresh Cameras", action: model.refreshCameras)
+                Button("Refresh Cameras", action: model.retryCamera)
+                Text("Your camera starts when a video app uses MovemberCam and stops when it is no longer in use.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section {
@@ -131,7 +137,7 @@ struct MainWindow: View {
                     Color.black
                     VideoPreviewSurface(feed: model.previewFeed)
                     if !model.isRunning {
-                        Label(model.isBusy ? "Opening camera…" : "Camera off", systemImage: "video.slash")
+                        Label(model.isBusy ? "Updating camera…" : "Waiting for a video app", systemImage: "video.slash")
                             .foregroundStyle(.white.opacity(0.8))
                             .padding(10)
                             .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
@@ -159,7 +165,7 @@ struct MainWindow: View {
 
                 GroupBox("Using MovemberCam in Zoom") {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Start your camera, then choose MovemberCam in Zoom → Settings → Video & effects.")
+                        Text("Choose MovemberCam in Zoom → Settings → Video & effects. Your camera starts automatically while Zoom uses it.")
                             .font(.callout)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
@@ -203,7 +209,7 @@ struct MainWindow: View {
         case .restartApp:
             model.prepareForRestart {
                 installer.noteAppRestart()
-                location.restart(resumingCamera: false)
+                location.restart()
             }
         case .none: break
         }

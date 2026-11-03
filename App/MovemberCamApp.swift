@@ -4,17 +4,10 @@ import Carbon
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var shutdown: ((@escaping () -> Void) -> Void)?
     var openSettings: (() -> Void)?
-    private var handledCaptureResume = false
-    private var launchedAtLogin = false
 
     @MainActor
     func settingsDidAppear(model: AppModel) {
         shutdown = { completion in model.shutdown(completion: completion) }
-        guard !handledCaptureResume else { return }
-        handledCaptureResume = true
-        if LaunchBehavior(arguments: CommandLine.arguments, launchedAtLogin: launchedAtLogin).resumeCamera {
-            model.start()
-        }
     }
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -23,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let event = NSAppleEventManager.shared().currentAppleEvent
         let atLogin = event?.paramDescriptor(forKeyword: AEKeyword(keyAELaunchedAsLogInItem)) != nil ||
             event?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == keyAELaunchedAsLogInItem
-        launchedAtLogin = atLogin
         RunLoop.main.perform(inModes: [.common]) {
             MainActor.assumeIsolated {
                 if atLogin { self.settingsWindow?.orderOut(nil) }
@@ -79,10 +71,11 @@ struct MovemberCamApp: App {
             }
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Camera") {
-                Button(model.cameraControls.title, action: model.performCameraAction)
-                .keyboardShortcut("k", modifiers: [.command])
-                .disabled(!model.cameraControls.isEnabled || (installer.blocksCapture && model.cameraControls.action == .start))
-                Button("Refresh Cameras", action: model.refreshCameras)
+                if model.cameraControls.action != nil {
+                    Button(model.cameraControls.title, action: model.performCameraAction)
+                        .disabled(!model.cameraControls.isEnabled)
+                }
+                Button("Refresh Cameras", action: model.retryCamera)
                 Toggle("Enable Overlay", isOn: $model.isOverlayEnabled)
                     .keyboardShortcut("o", modifiers: [.command, .shift])
                 Divider()
@@ -125,10 +118,12 @@ struct MenuBarControls: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Text(model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Camera off")
+        Text(model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Waiting for a video app")
         Toggle("Enable overlay", isOn: $model.isOverlayEnabled)
-        Button(model.cameraControls.title, action: model.performCameraAction)
-            .disabled(!model.cameraControls.isEnabled || (installer.blocksCapture && model.cameraControls.action == .start))
+        if model.cameraControls.action != nil {
+            Button(model.cameraControls.title, action: model.performCameraAction)
+                .disabled(!model.cameraControls.isEnabled)
+        }
         Divider()
         Button("Open settings…") {
             openWindow(id: "main")

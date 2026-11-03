@@ -2,29 +2,39 @@ import Foundation
 
 struct CameraControlState {
     enum Permission: Equatable { case allowed, notRequested, blocked }
-    enum Action: Equatable { case start, stop, requestAccess, openSettings }
+    enum Action: Equatable { case requestAccess, openSettings }
     var permission: Permission
-    var isRunning: Bool
     var isBusy: Bool
-    var hasCamera: Bool
 
-    var action: Action {
-        if isRunning { return .stop }
+    var action: Action? {
         switch permission {
-        case .allowed: return .start
+        case .allowed: return nil
         case .notRequested: return .requestAccess
         case .blocked: return .openSettings
         }
     }
 
-    var isEnabled: Bool { !isBusy && (isRunning || permission != .allowed || hasCamera) }
+    var isEnabled: Bool { !isBusy && action != nil }
     var title: String {
-        if isBusy { return "Please Wait…" }
-        switch action {
-        case .start: return "Start Camera"
-        case .stop: return "Stop Camera"
-        case .requestAccess: return "Allow Camera Access…"
-        case .openSettings: return "Open Camera Settings…"
+        switch permission {
+        case .allowed: return "Camera starts automatically"
+        case .notRequested: return "Allow Camera Access…"
+        case .blocked: return "Open Camera Settings…"
         }
     }
+}
+
+/// A failed session retries on a new consumer session or an explicit source change.
+/// Suspending for extension replacement must not discard existing consumer demand.
+struct CameraCaptureDemand {
+    private(set) var isRequested = false
+    var isSuspended = false
+    var hasFailed = false
+
+    mutating func update(_ requested: Bool) {
+        isRequested = requested
+        if !requested { hasFailed = false }
+    }
+
+    var shouldCapture: Bool { isRequested && !isSuspended && !hasFailed }
 }

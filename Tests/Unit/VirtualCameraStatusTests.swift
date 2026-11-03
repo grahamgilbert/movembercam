@@ -18,6 +18,11 @@ final class VirtualCameraStatusTests: XCTestCase {
         }
     }
 
+    func testOldExtensionRequiresAnUpdateBeforeItIsUsable() {
+        XCTAssertTrue(VirtualCameraStatus.requiresUpdate.isInstalled)
+        XCTAssertFalse(VirtualCameraStatus.requiresUpdate.isUsable)
+    }
+
     func testMissingDeviceRequiresInstallationAgain() {
         XCTAssertFalse(VirtualCameraStatus.notInstalled.isInstalled)
     }
