@@ -26,7 +26,7 @@ jobs:
   release:
     name: Sign, notarize, and publish DMG
     needs: verify
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 60
     permissions:
       contents: write
