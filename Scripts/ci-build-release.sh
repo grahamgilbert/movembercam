@@ -13,5 +13,6 @@ xcodebuild -quiet -project MovemberCam.xcodeproj -scheme MovemberCam -configurat
 signed_app="$PWD/build/release/MovemberCam.app"
 ditto build/release.xcarchive/Products/Applications/MovemberCam.app "$signed_app"
 python3 Scripts/verify-app-resources.py "$signed_app"
+python3 Scripts/verify-extension-version.py --app "$signed_app"
 bash Scripts/sign-release-app.sh "$signed_app" "$MOVEMBER_PROFILE_PATH" "$MOVEMBER_TEAM_ID"
 bash Scripts/build-dmg.sh --app "$signed_app" --notarize "$MOVEMBER_NOTARY_PROFILE"

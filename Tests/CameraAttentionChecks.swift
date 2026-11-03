@@ -54,7 +54,10 @@ import SystemExtensions
             engine = CameraEngine.latest!
             attention = CameraAttentionController(notifications: notifications, defaults: defaults)
         }
-        func bind() { attention.bind(model: model, installer: installer, restartApp: {}) }
+        func bind() {
+            installer.probeFreshCamera = { $0(.missing) }
+            attention.bind(model: model, installer: installer, restartApp: {})
+        }
         func approve(_ enabled: Bool) {
             let installed = InstalledCameraExtension(version: CameraExtensionVersion(release: "1.0.4", build: "16"),
                 isEnabled: enabled, isAwaitingApproval: !enabled, isUninstalling: false)

@@ -21,7 +21,11 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     @Published private(set) var statusCheckError: String?
     var message: String {
         let message: String
-        if state == .unavailable && changeRequest != nil {
+        if repairingRegistration {
+            message = "Repairing the camera registration. macOS will ask you to approve MovemberCam Camera again."
+        } else if state == .unavailable && registrationRepairNeeded && changeRequest == nil {
+            message = "macOS enabled the camera but did not start it. Repair its registration, then approve MovemberCam Camera again in System Settings."
+        } else if state == .unavailable && changeRequest != nil {
             message = "MovemberCam Camera is enabled, but macOS hasn’t finished activation. Restart MovemberCam to reconnect."
         } else if state == .unavailable && didRestartForRecovery {
             message = "The camera is still unavailable. " + CameraExtensionSettings.instructions() +
@@ -31,9 +35,10 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
     var recoveryAction: CameraExtensionRecoveryAction {
         if state == .unavailable && changeRequest != nil { return .restartApp }
+        if state == .unavailable && registrationRepairNeeded { return .repairRegistration }
         return state.recoveryAction(afterAppRestart: didRestartForRecovery)
     }
-    var offersAppRestart: Bool { state == .unavailable && !didRestartForRecovery && changeRequest == nil }
+    var offersAppRestart: Bool { state == .unavailable && !registrationRepairNeeded && !didRestartForRecovery && changeRequest == nil }
     var recoveryEnabled: Bool {
         recoveryAction != .none && (!busy || recoveryAction == .openSettings ||
             (state == .unavailable && recoveryAction == .restartApp))
@@ -60,7 +65,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     var refreshCamera: () -> Void = {}
     var reconnectCamera: () -> Void = {}
     var restartForStaleDiscovery: (() -> Bool)?
-    var probeFreshCamera: (@escaping (Bool) -> Void) -> Void = CameraDiscoveryProbe.run
+    var probeFreshCamera: (@escaping (CameraDiscoveryProbe.Result) -> Void) -> Void = CameraDiscoveryProbe.run
 
     private let bundledVersion: CameraExtensionVersion?
     private let recoveryDefaults: UserDefaults
@@ -81,6 +86,9 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     private var recoveryAttempts = 0
     private var lastCameraStatus = VirtualCameraStatus.idle(isInstalled: false)
     private var activatedInThisProcess = false
+    private var registrationRepairNeeded = false
+    private var repairingRegistration = false
+    private var terminating = false
     private static let automaticRestartKey = "MovemberCam.automaticDiscoveryRestart"
 
     override convenience init() {
@@ -111,13 +119,13 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func checkForUpgrade() {
-        guard !checked, canInstall else { return }
+        guard !terminating, !checked, canInstall else { return }
         checked = true
         refresh()
     }
 
     func refresh() {
-        guard canInstall, propertiesRequest == nil else { return }
+        guard !terminating, canInstall, propertiesRequest == nil else { return }
         if let changeRequest {
             // Querying macOS is safe while activation waits for the user. Keep the
             // activation request alive and never submit a duplicate change request.
@@ -156,15 +164,36 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func retryConnection() {
-        guard canInstall, !busy, state == .unavailable else { return }
+        guard !terminating, canInstall, !busy, state == .unavailable else { return }
         recoveryAttempts = 0
         Self.logger.notice("User requested connection recovery")
         if !lastCameraStatus.isInstalled || lastCameraStatus == .requiresUpdate { activate() }
         else { verify(resetConnection: true) }
     }
 
+    /// Use only after a fresh process confirms that macOS has no camera provider.
+    /// A second activation request alone is idempotent and cannot rebuild its failed launch job.
+    func repairRegistration() {
+        guard !terminating, canInstall, !busy, state == .unavailable, registrationRepairNeeded else { return }
+        recoveryAttempts = 0
+        repairingRegistration = true
+        verificationID = UUID()
+        state = .installing
+        Self.logger.notice("User requested camera registration repair; macOS approval will be required again")
+        prepareForActivation { [weak self] in
+            guard let self, self.repairingRegistration, self.state == .installing else { return }
+            let request = OSSystemExtensionRequest.deactivationRequest(
+                forExtensionWithIdentifier: VideoFormat.extensionIdentifier, queue: .main)
+            self.changeRequest = request
+            self.removing = true
+            request.delegate = self
+            Self.logger.notice("Repair removal submitted request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
+            self.submit(request)
+        }
+    }
+
     func install() {
-        guard !busy else { return }
+        guard !terminating, !busy else { return }
         guard canInstall, bundledVersion != nil else {
             state = .failed("Run a signed MovemberCam build from Applications to install its virtual camera.")
             return
@@ -178,7 +207,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         statusCheckError = nil
         state = .installing
         prepareForActivation { [weak self] in
-            guard let self, self.state == .installing else { return }
+            guard let self, !self.terminating, self.state == .installing else { return }
             let request = OSSystemExtensionRequest.activationRequest(
                 forExtensionWithIdentifier: VideoFormat.extensionIdentifier, queue: .main)
             self.changeRequest = request
@@ -190,7 +219,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func uninstall() {
-        guard !busy, canInstall else { return }
+        guard !terminating, !busy, canInstall else { return }
         verificationID = UUID()
         state = .removing
         let request = OSSystemExtensionRequest.deactivationRequest(
@@ -210,6 +239,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func receiveInstalled(_ installed: [InstalledCameraExtension], for request: OSSystemExtensionRequest) {
+        guard !terminating else { return }
         guard request === propertiesRequest else {
             Self.logger.debug("Ignored stale status response request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
             return
@@ -271,6 +301,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func inspect(_ installed: [InstalledCameraExtension]) {
+        guard !terminating else { return }
         guard let bundledVersion else { state = .failed("The bundled camera extension is missing."); return }
         switch CameraExtensionUpgradeAction.decide(bundled: bundledVersion, installed: installed) {
         case .installUpdate: activate()
@@ -289,7 +320,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
-        guard request === changeRequest else { return }
+        guard !terminating, request === changeRequest else { return }
         verificationID = UUID()
         statusCheckError = nil
         Self.logger.notice("Activation awaiting user approval request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
@@ -298,21 +329,40 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     func request(_ request: OSSystemExtensionRequest, actionForReplacingExtension existing: OSSystemExtensionProperties,
                  withExtension ext: OSSystemExtensionProperties) -> OSSystemExtensionRequest.ReplacementAction {
+        guard !terminating else { return .cancel }
         let old = CameraExtensionVersion(release: existing.bundleShortVersion, build: existing.bundleVersion)
         let new = CameraExtensionVersion(release: ext.bundleShortVersion, build: ext.bundleVersion)
         return new < old ? .cancel : .replace
     }
 
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {
-        guard request === changeRequest else { return }
+        guard !terminating, request === changeRequest else { return }
         Self.logger.notice("Extension change completed removal=\(self.removing, privacy: .public) request=\(ObjectIdentifier(request).hashValue, privacy: .public) result=\(result.rawValue, privacy: .public)")
         changeRequest = nil
         statusCheckError = nil
-        if result == .willCompleteAfterReboot { state = .restartRequired }
+        if result == .willCompleteAfterReboot { repairingRegistration = false; state = .restartRequired }
+        else if removing && repairingRegistration {
+            let id = UUID()
+            verificationID = id
+            Self.logger.notice("Repair removal completed; allowing the old launch job to finish before activation")
+            waitForRegistrationRemoval(id: id, remaining: 4)
+        }
         else if removing { state = .removed; refreshCamera() }
         else {
             activatedInThisProcess = true
             verify(resetConnection: true)
+        }
+    }
+
+    private func waitForRegistrationRemoval(id: UUID, remaining: Int) {
+        schedule { [weak self] in
+            guard let self, self.verificationID == id, self.repairingRegistration, self.changeRequest == nil else { return }
+            if remaining > 1 { self.waitForRegistrationRemoval(id: id, remaining: remaining - 1) }
+            else {
+                self.repairingRegistration = false
+                self.registrationRepairNeeded = false
+                self.activate()
+            }
         }
     }
 
@@ -353,13 +403,26 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     private func recoverStaleDiscovery(id: UUID) {
-        guard activatedInThisProcess, !lastCameraStatus.isInstalled,
-              let version = recoveryVersion, recoveryDefaults.string(forKey: Self.automaticRestartKey) != version,
-              restartForStaleDiscovery != nil else { state = .unavailable; return }
+        guard activatedInThisProcess, !lastCameraStatus.isInstalled, let version = recoveryVersion else {
+            state = .unavailable; return
+        }
         Self.logger.notice("Checking fresh discovery before automatic recovery cycle=\(id.uuidString, privacy: .public)")
-        probeFreshCamera { [weak self] found in
+        probeFreshCamera { [weak self] result in
             guard let self, self.verificationID == id, self.state == .verifying else { return }
-            guard found, !self.lastCameraStatus.isInstalled else { self.state = .unavailable; return }
+            if result == .failed {
+                Self.logger.error("Fresh discovery was inconclusive; registration removal is not justified")
+                self.state = .unavailable
+                return
+            }
+            guard result == .available else {
+                Self.logger.error("Fresh process cannot see the enabled camera; registration repair is required")
+                self.registrationRepairNeeded = true
+                self.state = .unavailable
+                return
+            }
+            guard !self.lastCameraStatus.isInstalled,
+                  self.recoveryDefaults.string(forKey: Self.automaticRestartKey) != version,
+                  self.restartForStaleDiscovery != nil else { self.state = .unavailable; return }
             let restartID = UUID()
             self.verificationID = restartID
             // Persist before launching anything. A successful connection must not
@@ -388,10 +451,12 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func observeCameraStatus(_ status: VirtualCameraStatus) {
+        guard !terminating else { return }
         lastCameraStatus = status
         if (state == .verifying || state == .unavailable), changeRequest == nil, status.isUsable {
             verificationID = UUID()
             state = .ready
+            registrationRepairNeeded = false
             if didRestartForRecovery { recoveryDefaults.removeObject(forKey: Self.restartKey) }
         } else if state == .ready, !status.isUsable {
             recoveryAttempts = 0
@@ -402,6 +467,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     func request(_ request: OSSystemExtensionRequest, didFailWithError error: Error) {
+        guard !terminating else { return }
         guard request === changeRequest || request === propertiesRequest else { return }
         let detail = error as NSError
         Self.logger.error("Extension request failed request=\(ObjectIdentifier(request).hashValue, privacy: .public) domain=\(detail.domain, privacy: .public) code=\(detail.code, privacy: .public)")
@@ -420,6 +486,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             }
         }
         changeRequest = nil
+        repairingRegistration = false
         propertiesRequest = nil
         propertiesPurpose = nil
         isCheckingStatus = false
@@ -437,5 +504,12 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         } else {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?General")!)
         }
+    }
+
+    func stopRecovery() {
+        terminating = true
+        verificationID = UUID()
+        repairingRegistration = false
+        Self.logger.notice("Stopped recovery before app termination")
     }
 }

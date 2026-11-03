@@ -6,7 +6,7 @@ struct CameraAttentionIssue: Equatable {
         case cameraPermission, missingCamera, captureFailure
     }
     enum Recovery: Equatable {
-        case extensionSettings, installExtension, retryExtension, restartApp
+        case extensionSettings, installExtension, retryExtension, repairExtension, restartApp
         case requestCameraAccess, cameraSettings, retryCapture, showSettings
 
         var title: String {
@@ -14,6 +14,7 @@ struct CameraAttentionIssue: Equatable {
             case .extensionSettings: return "Open Camera Extension Settings…"
             case .installExtension: return "Install Virtual Camera"
             case .retryExtension: return "Retry Camera Connection"
+            case .repairExtension: return "Repair Virtual Camera"
             case .restartApp: return "Restart MovemberCam"
             case .requestCameraAccess: return "Allow Camera Access…"
             case .cameraSettings: return "Open Camera Privacy Settings…"
@@ -74,6 +75,7 @@ struct CameraAttentionSnapshot {
         case .unavailable:
             return CameraAttentionIssue(kind: .extensionFailure, title: "Virtual camera is unavailable",
                 message: message, recovery: extensionRecovery == .openSettings ? .extensionSettings :
+                    extensionRecovery == .repairRegistration ? .repairExtension :
                     extensionRecovery == .reconnect ? .retryExtension : .restartApp)
         case .restartRequired:
             return CameraAttentionIssue(kind: .restartRequired, title: "Camera extension needs a Mac restart",

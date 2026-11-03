@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum MovemberCamEntry {
     static func main() {
         if CommandLine.arguments.contains(CameraDiscoveryProbe.argument) {
-            exit(CameraDiscoveryProbe.isCameraAvailable() ? 0 : 4)
+            exit(CameraDiscoveryProbe.inspect().rawValue)
         }
         MovemberCamApp.main()
     }

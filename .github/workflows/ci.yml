@@ -25,6 +25,7 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
+          fetch-depth: 2
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Toolchain
@@ -35,6 +36,8 @@ jobs:
         run: |
           mkdir -p build/verification
           swift test --xunit-output build/verification/unit-tests.xml
+      - name: Camera extension version policy
+        run: python3 Scripts/verify-extension-version.py
       - name: Video and QR integration checks
         run: bash Scripts/verify.sh
       - name: Release signing unit tests

@@ -1,0 +1,4 @@
+// Version the camera independently. App-only updates must keep the installed driver running.
+// Change this only with camera extension inputs, then update CameraExtensionRelease.json.
+MARKETING_VERSION = 1.0.9
+CURRENT_PROJECT_VERSION = 21

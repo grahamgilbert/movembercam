@@ -104,7 +104,7 @@ enum CameraExtensionSettings {
 
 
 enum CameraExtensionRecoveryAction: Equatable {
-    case none, install, retry, reconnect, restartApp, openSettings
+    case none, install, retry, reconnect, repairRegistration, restartApp, openSettings
 
     var title: String? {
         switch self {
@@ -112,6 +112,7 @@ enum CameraExtensionRecoveryAction: Equatable {
         case .install: return "Install Virtual Camera"
         case .retry: return "Retry Update"
         case .reconnect: return "Retry Connection"
+        case .repairRegistration: return "Repair Virtual Camera"
         case .restartApp: return "Restart MovemberCam"
         case .openSettings: return "Open System Settings"
         }
