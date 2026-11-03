@@ -10,6 +10,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
             ? "Enable MovemberCam in System Settings to finish connecting the camera." : state.message
     }
     var recoveryAction: CameraExtensionRecoveryAction { state.recoveryAction(afterAppRestart: didRestartForRecovery) }
+    var recoveryEnabled: Bool { recoveryAction != .none && (!busy || recoveryAction == .openSettings) }
     private static let restartKey = "MovemberCam.extensionRecoveryRestart"
     private var recoveryVersion: String? { bundledVersion.map { "\($0.release)(\($0.build))" } }
     private var didRestartForRecovery: Bool {

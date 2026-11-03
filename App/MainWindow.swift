@@ -188,7 +188,8 @@ struct MainWindow: View {
                 if let title = installer.recoveryAction.title, location.isInApplications {
                     Button(title, action: recoverExtension)
                         .buttonStyle(.borderedProminent)
-                        .disabled(installer.busy)
+                        .disabled(!installer.recoveryEnabled ||
+                            (installer.recoveryAction == .restartApp && (model.isBusy || location.isMoving)))
                 }
             }
         }
@@ -200,8 +201,10 @@ struct MainWindow: View {
         case .retry: installer.refresh()
         case .openSettings: installer.openSettings()
         case .restartApp:
-            installer.noteAppRestart()
-            model.prepareForRestart { location.restart(resumingCamera: false) }
+            model.prepareForRestart {
+                installer.noteAppRestart()
+                location.restart(resumingCamera: false)
+            }
         case .none: break
         }
     }

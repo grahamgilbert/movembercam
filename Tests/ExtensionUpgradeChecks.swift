@@ -44,6 +44,8 @@ import SystemExtensions
         try check(!update.installer.isReady, "An older visible camera does not finish a pending activation")
         update.installer.requestNeedsUserApproval(activation)
         try check(update.installer.needsApproval && update.installer.busy, "Pending approval stays visible and blocks duplicate requests")
+        try check(update.installer.recoveryEnabled && update.installer.recoveryAction == .openSettings,
+                  "System Settings remains actionable while macOS is waiting for approval")
         update.installer.request(activation, didFinishWithResult: .completed)
         try check(update.installer.state == .verifying, "Activation completion waits for device discovery")
         try check(!update.installer.blocksCapture, "Physical preview remains usable while virtual-camera discovery is pending")
