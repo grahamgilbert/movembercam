@@ -115,9 +115,9 @@ struct MovemberCamApp: App {
             MainWindow(model: model, installer: installer, loginItem: loginItem, location: location, updater: updater, attention: attention)
                 .onAppear { delegate.settingsDidAppear(model: model, installer: installer, attention: attention, location: location) }
         }
-        .defaultSize(width: 1280, height: 980)
+        .defaultSize(width: 1100, height: 720)
         .windowStyle(.titleBar)
-        .windowResizability(.contentMinSize)
+        .windowResizability(.automatic)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…", action: updater.checkForUpdates)

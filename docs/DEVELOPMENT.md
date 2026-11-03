@@ -162,3 +162,9 @@ Discovery preserves an existing connection failure. When capture is active, the 
 ### Notification copy and icons
 
 Notifications use a separate short title and one-sentence body, with full instructions confined to Settings. The app icon is compiled from `Resources/Assets.xcassets/AppIcon.appiconset`, using the existing camera/mustache artwork at every macOS size. `CFBundleIconName` explicitly names the compiled asset. `Scripts/RenderAppIcon.swift` regenerates both the iconset and asset catalog before release builds. `Scripts/verify-app-resources.py` checks the built bundle’s icon metadata, compiled asset renditions, and fallback icon before preview signing and release packaging. Notification Center icon appearance and activation during a signed upgrade still require a native smoke test.
+
+### Compact Settings window
+
+Settings is organized into Camera, Overlay, and App tabs. Camera and Overlay retain a preview that fits the available width and height; App groups extension recovery, login, updates, and version information in a scrolling form. The attention banner remains visible across all tabs. Opening Settings still counts as physical camera demand regardless of the selected tab.
+
+The preferred content size is 1100×720, with a usual minimum of 860×560. The underlying content can fit smaller displays; AppKit clamps the saved frame and minimum size to the screen’s visible area, leaving room for system UI. Window resize, display changes, and monitor disconnection recheck those bounds. WindowLayoutTests covers oversized saved frames, laptop scaling, disconnected monitors, negative display coordinates, and already-fitting windows.

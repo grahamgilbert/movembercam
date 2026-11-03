@@ -11,12 +11,15 @@ struct NativeWindowStyle: NSViewRepresentable {
     }
     func updateNSView(_ view: WindowStyleView, context: Context) {
         view.minimumContentSize = minimumContentSize
-        view.enlargeIfNeeded()
+        view.fitToScreen()
     }
 }
 
 final class WindowStyleView: NSView {
     var minimumContentSize: CGSize?
+    private var observers: [NSObjectProtocol] = []
+    private var changingFullScreen = false
+    deinit { observers.forEach(NotificationCenter.default.removeObserver) }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard let window else { return }
@@ -31,18 +34,36 @@ final class WindowStyleView: NSView {
             window.standardWindowButton(type)?.isHidden = false
             window.standardWindowButton(type)?.isEnabled = true
         }
-        enlargeIfNeeded()
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = [NSWindow.didChangeScreenNotification, NSWindow.didResizeNotification, NSApplication.didChangeScreenParametersNotification,
+                     NSWindow.willEnterFullScreenNotification, NSWindow.didEnterFullScreenNotification,
+                     NSWindow.willExitFullScreenNotification, NSWindow.didExitFullScreenNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name,
+                object: name == NSApplication.didChangeScreenParametersNotification ? nil : window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if name == NSWindow.willEnterFullScreenNotification || name == NSWindow.willExitFullScreenNotification {
+                        self.changingFullScreen = true
+                        return
+                    }
+                    if name == NSWindow.didEnterFullScreenNotification || name == NSWindow.didExitFullScreenNotification {
+                        self.changingFullScreen = false
+                    }
+                    self.fitToScreen()
+                }
+            }
+        }
+        fitToScreen()
     }
 
-    func enlargeIfNeeded() {
-        guard let window, let minimumContentSize else { return }
-        let current = window.contentRect(forFrameRect: window.frame).size
-        guard current.width < minimumContentSize.width || current.height < minimumContentSize.height else { return }
-        let size = CGSize(width: max(current.width, minimumContentSize.width),
-                          height: max(current.height, minimumContentSize.height))
-        var frame = window.frameRect(forContentRect: CGRect(origin: .zero, size: size))
-        frame.origin = CGPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
-        if let screen = window.screen { frame = window.constrainFrameRect(frame, to: screen) }
-        window.setFrame(frame, display: true)
+    func fitToScreen() {
+        guard let window, !changingFullScreen, !window.styleMask.contains(.fullScreen),
+              let minimumContentSize, let screen = window.screen ?? NSScreen.main else { return }
+        let availableContent = window.contentRect(forFrameRect: screen.visibleFrame.insetBy(dx: 12, dy: 12)).size
+        window.contentMinSize = CGSize(width: min(minimumContentSize.width, availableContent.width),
+                                       height: min(minimumContentSize.height, availableContent.height))
+        let minimumFrame = window.frameRect(forContentRect: CGRect(origin: .zero, size: window.contentMinSize)).size
+        let frame = WindowLayout.fittedFrame(window.frame, visibleFrame: screen.visibleFrame, minimumSize: minimumFrame)
+        if frame != window.frame { window.setFrame(frame, display: true) }
     }
 }

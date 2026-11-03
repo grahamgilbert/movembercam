@@ -35,6 +35,7 @@
 		9BB11C7FE1476BDCE4DB2857 /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24046F348AC2E826529C055D /* LoginItemManager.swift */; };
 		9F864BF035B9776FD9560A6C /* CameraExtension.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A0C8E1D13E548BA75E82F66C /* CameraControlState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0577CF381EA23F673578BC /* CameraControlState.swift */; };
+		CD4B43FD4D4BE38CD3DF698F /* WindowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D865702F080DA67EB0BE5DB8 /* WindowLayout.swift */; };
 		D80506501ED8AA36DB5903B7 /* AppUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EDD83F43AF123C8D5EB589B /* AppUpdater.swift */; };
 		DD0231E821DF2FA817CA0F7D /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */; };
 		DDF3633A749B741181BC374E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F4B5D25EEA36B52A2DA4CDA3 /* Assets.xcassets */; };
@@ -93,6 +94,7 @@
 		B520920B3151E3332153935E /* CameraAttention.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraAttention.swift; sourceTree = "<group>"; };
 		BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFormat.swift; sourceTree = "<group>"; };
 		CD8457C9AC1CAD1014E0D8C0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		D865702F080DA67EB0BE5DB8 /* WindowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowLayout.swift; sourceTree = "<group>"; };
 		D8F33135D6A7D7FCD3BC4DAE /* CameraExtension.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = CameraExtension.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
 		DE88F720522891DA02E6DBC0 /* OverlayConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayConfiguration.swift; sourceTree = "<group>"; };
 		E54B8440F130F94398D46C7E /* MainWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindow.swift; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 				BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */,
 				10E572F554A8FF8D7B66A4CC /* VideoFrameRenderer.swift */,
 				AAA9897C658157DABE9482AB /* VirtualCameraStatus.swift */,
+				D865702F080DA67EB0BE5DB8 /* WindowLayout.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -334,6 +337,7 @@
 				E36AA68D245979ECFD5E7D55 /* VideoFrameRenderer.swift in Sources */,
 				157581DD7B6E2F6D3DDC6BA1 /* VirtualCameraOutput.swift in Sources */,
 				012DA3E8F75CB8EECE87CEB9 /* VirtualCameraStatus.swift in Sources */,
+				CD4B43FD4D4BE38CD3DF698F /* WindowLayout.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -383,7 +387,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -403,7 +407,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.8;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -519,7 +523,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 20;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -533,7 +537,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.7;
+				MARKETING_VERSION = 1.0.8;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
