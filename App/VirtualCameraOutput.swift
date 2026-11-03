@@ -13,6 +13,8 @@ final class VirtualCameraOutput {
     private var bufferQueue: CMSimpleQueue?
     private var inputFormat: VideoFormat?
     private var renderer: VideoFrameRenderer?
+    private var sentQRCode: FrameQRCode?
+    private var didSendQRCode = false
     private var lastProbe: CFAbsoluteTime = 0
     private var deviceListener: CMIOObjectPropertyListenerBlock?
     private var status = VirtualCameraStatus.idle(isInstalled: false) {
@@ -95,6 +97,24 @@ final class VirtualCameraOutput {
               let bufferQueue, let renderer,
               CMSimpleQueueGetCount(bufferQueue) < CMSimpleQueueGetCapacity(bufferQueue),
               let output = try? renderer.render(input, at: sample.presentationTimeStamp) else { return }
+        let qrCode = output.imageBuffer.flatMap(FrameQRCode.init)
+        if !didSendQRCode || qrCode != sentQRCode {
+            var property = address(Int(FrameQRCode.controlSelector))
+            // Older 720p extensions need no extra conversion and have no control property.
+            if CMIOObjectHasProperty(stream, &property) {
+                guard let encoded = try? FrameQRCodeUpdate(qrCode: qrCode,
+                    effectiveTime: output.presentationTimeStamp.seconds).encoded() else { return }
+                let value = encoded as CFString
+                var unmanaged = Unmanaged.passUnretained(value)
+                let result = withExtendedLifetime(value) {
+                    CMIOObjectSetPropertyData(stream, &property, 0, nil,
+                        UInt32(MemoryLayout.size(ofValue: unmanaged)), &unmanaged)
+                }
+                guard result == noErr else { status = .cannotOpen(result); return }
+            }
+            sentQRCode = qrCode
+            didSendQRCode = true
+        }
         let retained = Unmanaged.passRetained(output)
         if CMSimpleQueueEnqueue(bufferQueue, element: retained.toOpaque()) != noErr {
             retained.release()
@@ -118,6 +138,8 @@ final class VirtualCameraOutput {
         bufferQueue = nil
         inputFormat = nil
         renderer = nil
+        sentQRCode = nil
+        didSendQRCode = false
         device = 0
         stream = 0
         lastProbe = 0

@@ -178,7 +178,11 @@ final class AppModel: ObservableObject {
         stop(restarting: false)
     }
 
-    private func stop(restarting: Bool) {
+    func prepareForExtensionUpdate(_ completion: @escaping () -> Void) {
+        stop(restarting: false, completion: completion)
+    }
+
+    private func stop(restarting: Bool, completion: (() -> Void)? = nil) {
         let token = UUID()
         generation = token
         isBusy = true
@@ -189,9 +193,10 @@ final class AppModel: ObservableObject {
                 self.isBusy = false
                 self.virtualCameraStatus = .idle(isInstalled: self.virtualCameraAvailable)
                 if restarting { self.start() }
+                completion?()
             }
         }
-        if engine == nil { isRunning = false; isBusy = false }
+        if engine == nil { isRunning = false; isBusy = false; completion?() }
     }
 
     func shutdown(completion: @escaping () -> Void) {

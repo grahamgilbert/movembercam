@@ -100,7 +100,7 @@ The preview displays the same composited video through `AVSampleBufferDisplayLay
 
 Auto resolution selects the largest camera video mode up to 3840 × 2160 that supports 30 fps. If no mode supports exactly 30 fps, it prefers the nearest supported rate, then resolution. Capture output is capped at 30 fps. The compositor reads the actual incoming frame dimensions, rebuilds its buffers and overlay when they change, and preserves the camera's aspect ratio. Overlay dimensions and margins scale proportionally; QR modules stay aligned to whole output pixels.
 
-The extension advertises a fixed list of common 16:9 and 4:3 formats through 4K. Before starting the sink, the app reads the installed extension's formats and selects an exact resolution match where available, otherwise the closest aspect ratio without increasing resolution when possible. This also permits a new app to feed an older 720p extension. The source defaults to the sink's resolution while no meeting is using it. Once a meeting selects a source format, the extension keeps that output size when cameras change and scales frames as needed. Aspect-ratio conversions add borders to retain the whole QR card and branding. Updating the extension and reopening the meeting app is required to expose the new formats to an existing installation.
+The extension advertises a fixed list of common 16:9 and 4:3 formats through 4K. Before starting the sink, the app reads the installed extension's formats and selects an exact resolution match where available, otherwise the closest aspect ratio without increasing resolution when possible. This also permits a new app to feed an older 720p extension. The source defaults to the sink's resolution while no meeting is using it. Once a meeting selects a source format, the extension keeps that output size when cameras change and scales frames as needed. Aspect-ratio conversions add borders to retain the whole QR card and branding. In-process pixel-buffer attachments carry the QR URL and drawing area. Because CMIO drops those attachments across processes, the app sends timestamped QR changes through the sink’s custom `mqrc` control property. The extension associates each change with queued frame timestamps. Each converter redraws the QR at an integer module size on its final pixel grid and caches the artwork until its URL or layout changes. At small letterboxed sizes, the QR drawing area grows enough to retain a one-pixel module and four-module white margin. Bypassed and idle frames clear QR reconstruction. Updating the extension and reopening the meeting app is required to expose the new formats to an existing installation.
 
 Switching cameras during capture stops the old source and resumes with the new one. The extension sends an empty dark frame at the negotiated output resolution when capture stops or no fresh frame arrives for half a second. Audio stays with the microphone selected in the meeting app.
 
@@ -109,3 +109,26 @@ Overlay settings are stored locally in macOS preferences. **Apply Changes** save
 Sparkle checks for signed updates every hour when automatic checks are enabled. Prerelease updates are optional. Update feeds and downloads come from this repository; video rendering and QR generation happen locally.
 
 References: [Apple camera extensions](https://developer.apple.com/documentation/coremediaio/creating-a-camera-extension-with-core-media-i-o), [WWDC Core Media I/O overview](https://developer.apple.com/videos/play/wwdc2022/10022/), and [Movember fundraising assets](https://uk.movember.com/support-us/workplace-fundraising-assets).
+
+### Extension upgrades
+
+On launch from Applications, signed builds query SystemExtensions for installed versions of the bundled camera extension. Older enabled versions are activated automatically; a first installation and a deliberately disabled extension remain user choices. Removed versions awaiting reboot are ignored when choosing the active version, and the app does not downgrade a newer installed extension.
+
+Capture stops before replacement. Activation completion starts a bounded CoreMediaIO availability check rather than immediately reporting success. A missing device triggers one registration retry after ten seconds; another ten seconds without discovery offers Restart MovemberCam. The Virtual Camera settings show one recovery action at a time; if an app restart has already been tried, the next action opens System Settings. Physical preview stays usable while discovery is pending. The restart helper waits for the old app process to exit before reopening it, so its CMIO connection is fresh and SwiftUI windows reopen reliably. Approval, reboot-required results, validation failures, and removal have distinct UI states. Errors remain visible when an older device is still discoverable. Signed distribution builds must be notarized; development signing can be used for local extension testing without changing macOS security settings.
+
+`Tests/ExtensionUpgradeChecks.swift` runs the production installer with inert SystemExtensions requests and a controlled scheduler, covering activation/discovery ordering, approval, retries, stale callbacks, validation failures, and removal. `CameraExtensionUpgradeTests` covers version selection and disabled/removal policies. Live testing still requires updating the installed extension and checking the camera from another process.
+
+### Live transport check
+
+Normal CI runs the synthetic video/QR checks, stream-property checks, and controlled installer tests through `Scripts/verify.sh`. They need macOS frameworks but no physical camera or installed extension. The live checker below also uses synthetic camera pixels, but requires a signed, installed, approved extension; use it manually or on a Mac runner configured for extension testing. Stop capture in MovemberCam before running its default writer test, and close other apps consuming the virtual camera so they do not renegotiate its source format during the test.
+
+```sh
+swiftc -swift-version 5 -module-cache-path build/ModuleCache.noindex \
+  Shared/VideoFormat.swift Shared/VideoFrameRenderer.swift \
+  Shared/OverlayConfiguration.swift Shared/FrameCompositor.swift \
+  Scripts/LiveCameraChecks.swift -o build/verification/LiveCameraChecks
+build/verification/LiveCameraChecks
+build/verification/LiveCameraChecks --480
+```
+
+The checker sends a 220-byte QR link at 1080p through the real CMIO sink and decodes the negotiated 360p or 480p source frames with Vision. It fails when no QR decodes. It does not save frames or open the physical camera. Use `--inspect` to inspect formats, or `--read-only --360 --long` while MovemberCam captures with the checker’s synthetic long URL to test the physical-camera path. After testing, `--reset720` returns source and sink to their default format for compatibility with older apps. Physical camera discovery and capture still require a separate smoke test.

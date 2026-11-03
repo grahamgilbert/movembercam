@@ -35,6 +35,7 @@
 		E75FA214B877968E2EBB539F /* CameraProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202E3142C9A08EA0678BDB2D /* CameraProvider.swift */; };
 		A2F14A66A988482D8AA8B001 /* VideoFrameRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F14A66A988482D8AA8B003 /* VideoFrameRenderer.swift */; };
 		A2F14A66A988482D8AA8B002 /* VideoFrameRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F14A66A988482D8AA8B003 /* VideoFrameRenderer.swift */; };
+		B2F14A66A988482D8AA8B001 /* CameraExtensionUpgrade.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F14A66A988482D8AA8B002 /* CameraExtensionUpgrade.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +90,7 @@
 		F104903DBD4EEB9CE6569A34 /* CameraEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraEngine.swift; sourceTree = "<group>"; };
 		F8248514F69E612AA52E9BC5 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		A2F14A66A988482D8AA8B003 /* VideoFrameRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFrameRenderer.swift; sourceTree = "<group>"; };
+		B2F14A66A988482D8AA8B002 /* CameraExtensionUpgrade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraExtensionUpgrade.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +126,7 @@
 				BA7FE64F4A18FFA9A2ADD49E /* VideoFormat.swift */,
 				A2F14A66A988482D8AA8B003 /* VideoFrameRenderer.swift */,
 				AAA9897C658157DABE9482AB /* VirtualCameraStatus.swift */,
+				B2F14A66A988482D8AA8B002 /* CameraExtensionUpgrade.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -313,6 +316,7 @@
 				4ABA5943373530BDBE5D489E /* VideoFormat.swift in Sources */,
 				A2F14A66A988482D8AA8B002 /* VideoFrameRenderer.swift in Sources */,
 				157581DD7B6E2F6D3DDC6BA1 /* VirtualCameraOutput.swift in Sources */,
+				B2F14A66A988482D8AA8B001 /* CameraExtensionUpgrade.swift in Sources */,
 				012DA3E8F75CB8EECE87CEB9 /* VirtualCameraStatus.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

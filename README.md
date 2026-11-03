@@ -10,11 +10,11 @@ MovemberCam adds a fundraising QR code, a link, and the Movember logo to your ca
 
 1. Open the downloaded DMG and drag **MovemberCam** into **Applications**.
 2. Open MovemberCam and click **Allow Camera Access…** to grant camera permission.
-3. Click **Install Virtual Camera** beneath the preview and approve the extension when macOS prompts you. Follow any instructions to restart MovemberCam or your Mac.
+3. Click **Install Virtual Camera** beneath the preview and approve the extension when macOS prompts you. Wait for **Virtual camera ready**, or follow the instructions to restart your Mac.
 4. Choose your physical camera and enter your fundraising links in **QR destination** and **Written URL**. Click **Apply Changes**, then **Start Camera**.
 5. Quit and reopen your video app, then select **MovemberCam** as its camera. Keep MovemberCam running during calls.
 
-Reopen your video app after updating the virtual camera. If approval is still pending, follow the macOS prompt to enable the extension in System Settings.
+After an app update, MovemberCam automatically updates an older enabled camera extension and checks that the camera becomes available. It pauses capture during replacement; start the camera again when it is ready. If macOS requests approval, enable MovemberCam in **System Settings → General → Login Items & Extensions**. If the camera does not return, use **Retry Connection** and follow the restart guidance. Reopen your video app to discover updated camera formats. A disabled extension stays disabled.
 
 ## Using MovemberCam
 

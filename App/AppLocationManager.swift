@@ -54,10 +54,14 @@ final class AppLocationManager: ObservableObject {
 
     private func relaunch(at url: URL, resumingCamera: Bool = false) async {
         do {
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.createsNewApplicationInstance = true
-            configuration.arguments = LaunchBehavior.restartArguments(wasCapturing: resumingCamera)
-            _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+            let relaunch = Process()
+            relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
+            relaunch.arguments = LaunchBehavior.relaunchArguments(processID: ProcessInfo.processInfo.processIdentifier,
+                applicationPath: url.path, wasCapturing: resumingCamera)
+            relaunch.standardInput = FileHandle.nullDevice
+            relaunch.standardOutput = FileHandle.nullDevice
+            relaunch.standardError = FileHandle.nullDevice
+            try relaunch.run()
             // Leave the Swift task before AppKit enters its termination run loop.
             RunLoop.main.perform(inModes: [.common]) {
                 MainActor.assumeIsolated { NSApp.terminate(nil) }

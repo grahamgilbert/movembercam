@@ -26,4 +26,12 @@ enum VirtualCameraStatus: Equatable {
         case .cannotStart(let result): return "Cannot start virtual camera (\(result))"
         }
     }
+
+    var isUsable: Bool {
+        switch self {
+        case .idle(isInstalled: true), .sending: return true
+        default: return false
+        }
+    }
+
 }

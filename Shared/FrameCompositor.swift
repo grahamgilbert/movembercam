@@ -67,6 +67,13 @@ final class FrameCompositor {
         // Mirror only the physical camera, so the QR code and lettering stay readable.
         let image = isOverlayEnabled ? overlay.composited(over: background) : background
         context.render(image, to: output, bounds: bounds, colorSpace: colorSpace)
+        FrameQRCode.remove(from: output)
+        if isOverlayEnabled {
+            let scale = min(CGFloat(format.width) / 1280, CGFloat(format.height) / 720)
+            let x = configuration.corner == .right ? CGFloat(format.width) - 256 * scale : 40 * scale
+            FrameQRCode(url: configuration.qrURL,
+                area: CGRect(x: x, y: 76 * scale, width: 216 * scale, height: 216 * scale)).attach(to: output)
+        }
         return try VideoFormat.sample(output, at: time, description: description)
     }
 

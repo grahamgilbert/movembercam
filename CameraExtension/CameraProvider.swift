@@ -36,6 +36,8 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     private var source: CameraStream!
     private var sink: CameraStream!
     private var renderer: VideoFrameRenderer
+    private var qrUpdates: [FrameQRCodeUpdate] = []
+    private(set) var qrControlValue = ""
     private var latest: CVPixelBuffer?
     private var latestTime = -Double.infinity
     private var sourceClients = 0
@@ -80,7 +82,19 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
             if sourceClients == 0 { try source.selectFormat(index) }
             latest = nil
             latestTime = -Double.infinity
+            qrUpdates.removeAll()
+            qrControlValue = ""
         }
+    }
+
+    func setQRCodeUpdate(_ update: FrameQRCodeUpdate, encoded: String) {
+        qrUpdates.append(update)
+        if qrUpdates.count > 16 { qrUpdates.removeFirst(qrUpdates.count - 16) }
+        qrControlValue = encoded
+    }
+
+    func qrCode(at time: CMTime) -> FrameQRCode? {
+        qrUpdates.last(where: { $0.effectiveTime <= time.seconds })?.qrCode
     }
 
     func authorizeSink(_ client: CMIOExtensionClient) -> Bool {
@@ -123,6 +137,8 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
         sinkClient = nil
         sinkGeneration &+= 1
         consumePending = false
+        qrUpdates.removeAll()
+        qrControlValue = ""
         latest = nil
         latestTime = -Double.infinity
     }
@@ -145,6 +161,8 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
                           VideoFormat(buffer) == self.sink.activeFormat,
                           CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA else { return }
                     let received = CMClockGetTime(CMClockGetHostTimeClock())
+                    FrameQRCode.remove(from: buffer)
+                    self.qrCode(at: sample.presentationTimeStamp)?.attach(to: buffer)
                     self.latest = buffer
                     self.latestTime = sample.presentationTimeStamp.seconds
                     self.sink.stream.notifyScheduledOutputChanged(CMIOExtensionScheduledOutput(sequenceNumber: sequence,
@@ -182,13 +200,17 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
     var availableProperties: Set<CMIOExtensionProperty> {
         var properties: Set<CMIOExtensionProperty> = [.streamActiveFormatIndex, .streamFrameDuration]
         if direction == .sink {
-            properties.formUnion([.streamSinkBufferQueueSize, .streamSinkBuffersRequiredForStartup])
+            properties.formUnion([.streamSinkBufferQueueSize, .streamSinkBuffersRequiredForStartup, FrameQRCode.controlProperty])
         }
         return properties
     }
 
     func streamProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionStreamProperties {
         let result = CMIOExtensionStreamProperties(dictionary: [:])
+        if direction == .sink, properties.contains(FrameQRCode.controlProperty) {
+            result.setPropertyState(CMIOExtensionPropertyState<AnyObject>(value: owner.qrControlValue as NSString),
+                                    forProperty: FrameQRCode.controlProperty)
+        }
         if properties.contains(.streamActiveFormatIndex) { result.activeFormatIndex = activeFormatIndex }
         if properties.contains(.streamFrameDuration) { result.frameDuration = VideoFormat.duration }
         if properties.contains(.streamSinkBufferQueueSize) { result.sinkBufferQueueSize = 3 }
@@ -203,7 +225,16 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
         if let duration = streamProperties.frameDuration, CMTimeCompare(duration, VideoFormat.duration) != 0 {
             throw VideoError.message("Only 30 fps is supported.")
         }
+        var qrUpdate: (FrameQRCodeUpdate, String)?
+        if let property = streamProperties.propertiesDictionary[FrameQRCode.controlProperty] {
+            guard direction == .sink, let value = property.value as? String else {
+                throw VideoError.message("Invalid QR control property.")
+            }
+            let format = VideoFormat.supported[streamProperties.activeFormatIndex ?? activeFormatIndex]
+            qrUpdate = (try FrameQRCodeUpdate.decode(value, format: format), value)
+        }
         if let index = streamProperties.activeFormatIndex { try selectFormat(index) }
+        if let (update, encoded) = qrUpdate { owner.setQRCodeUpdate(update, encoded: encoded) }
     }
 
     func selectFormat(_ index: Int) throws {

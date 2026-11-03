@@ -52,6 +52,43 @@ enum CameraExtensionChecks {
         try check(rejected && source.activeFormatIndex == 3, "Unsupported frame rate rejects the whole property change")
         try select(0, on: sink)
         try check(source.activeFormat == .hd720, "Switching back to a 720p camera resets source and sink")
+        try checkQRControl(camera, sink: sink, source: source)
+    }
+
+    static func checkQRControl(_ camera: CameraDevice, sink: CameraStream, source: CameraStream) throws {
+        try check(sink.availableProperties.contains(FrameQRCode.controlProperty) &&
+                  !source.availableProperties.contains(FrameQRCode.controlProperty), "Only the input stream exposes the QR control channel")
+        let qr = FrameQRCode(url: "https://example.com/" + String(repeating: "x", count: 200),
+                             area: CGRect(x: 40, y: 76, width: 216, height: 216))
+        let encoded = try FrameQRCodeUpdate(qrCode: qr, effectiveTime: 1).encoded()
+        let properties = CMIOExtensionStreamProperties(dictionary: [FrameQRCode.controlProperty:
+            CMIOExtensionPropertyState<AnyObject>(value: encoded as NSString)])
+        try sink.setStreamProperties(properties)
+        try check(camera.qrControlValue == encoded, "QR control data reaches the device without frame attachments")
+        let read = try sink.streamProperties(forProperties: [FrameQRCode.controlProperty])
+        try check(read.propertiesDictionary[FrameQRCode.controlProperty]?.value as? String == encoded,
+                  "QR control property reads back its current value")
+        for value in ["invalid JSON", try FrameQRCodeUpdate(qrCode: FrameQRCode(url: qr.url,
+            area: CGRect(x: 9000, y: 0, width: 216, height: 216)), effectiveTime: 1).encoded()] {
+            let invalid = CMIOExtensionStreamProperties(dictionary: [FrameQRCode.controlProperty:
+                CMIOExtensionPropertyState<AnyObject>(value: value as NSString)])
+            var rejected = false
+            do { try sink.setStreamProperties(invalid) } catch { rejected = true }
+            try check(rejected && camera.qrControlValue == encoded, "Malformed QR updates leave the active control unchanged")
+        }
+        try check(camera.qrCode(at: CMTime(seconds: 0.5, preferredTimescale: 1000)) == nil &&
+                  camera.qrCode(at: CMTime(seconds: 1.5, preferredTimescale: 1000)) == qr,
+                  "Queued frames use QR controls effective at their own capture timestamp")
+        let disabled = try FrameQRCodeUpdate(qrCode: nil, effectiveTime: 2).encoded()
+        try sink.setStreamProperties(CMIOExtensionStreamProperties(dictionary: [FrameQRCode.controlProperty:
+            CMIOExtensionPropertyState<AnyObject>(value: disabled as NSString)]))
+        try check(try FrameQRCodeUpdate.decode(camera.qrControlValue, format: .hd720).qrCode == nil,
+                  "Disabling the overlay clears QR reconstruction in the extension")
+        try check(camera.qrCode(at: CMTime(seconds: 1.5, preferredTimescale: 1000)) == qr &&
+                  camera.qrCode(at: CMTime(seconds: 2, preferredTimescale: 1000)) == nil,
+                  "A bypass update does not change the QR of earlier queued frames")
+        try select(1, on: sink)
+        try check(camera.qrControlValue.isEmpty, "Changing input resolution clears stale QR controls")
     }
 
     static func main() {

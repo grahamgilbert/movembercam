@@ -133,6 +133,7 @@ enum OverlayChecks {
         try check(OverlayPreferences.load(from: reopened) == OverlayConfiguration(),
                   "Migrated defaults are saved to preferences")
         try checkResolutions(logo: logo, time: time, root: root)
+        try checkQRCodeLifecycle(camera: camera, time: time)
         print("\n\(checks) checks passed. Render: build/verification/overlay.png")
     }
 
@@ -142,6 +143,8 @@ enum OverlayChecks {
         // Reuse one compositor to exercise changes both up and down, as when switching cameras.
         let sizes = [VideoFormat(width: 1920, height: 1080), VideoFormat(width: 2560, height: 1440),
                      VideoFormat(width: 3840, height: 2160), VideoFormat(width: 1600, height: 1200),
+                     VideoFormat(width: 1280, height: 960), VideoFormat(width: 1920, height: 1440),
+                     VideoFormat(width: 1552, height: 1552),
                      VideoFormat(width: 2304, height: 1296), VideoFormat(width: 640, height: 480),
                      VideoFormat(width: 640, height: 360), .hd720]
         for format in sizes {
@@ -184,6 +187,19 @@ enum OverlayChecks {
                 try check(CMTimeCompare(downscaled.presentationTimeStamp, time) == 0, "Conversion preserves timing: \(label)")
                 let sameSize = try VideoFrameRenderer(format: format).render(sample.imageBuffer, at: time)
                 try check(sameSize.imageBuffer === sample.imageBuffer, "Matching output reuses the camera pixels: \(label)")
+
+                // Maximum-length links have denser modules than the default URL. Exercise
+                // the production converter at the smallest advertised meeting resolutions.
+                settings.qrURL = "https://example.com/" + String(repeating: "x", count: 200)
+                try compositor.configure(settings)
+                let longLink = try compositor.render(camera, at: time)
+                for outputFormat in [VideoFormat(width: 640, height: 360), VideoFormat(width: 640, height: 480)] {
+                    let converted = try VideoFrameRenderer(format: outputFormat).render(longLink.imageBuffer, at: time)
+                    let output = CIContext().createCGImage(CIImage(cvPixelBuffer: converted.imageBuffer!),
+                        from: CGRect(x: 0, y: 0, width: outputFormat.width, height: outputFormat.height))!
+                    try check(try codes(output) == [settings.qrURL],
+                              "Long QR survives \(label) → \(outputFormat.width) × \(outputFormat.height)")
+                }
             }
         }
         let renderer = try VideoFrameRenderer(format: VideoFormat(width: 1920, height: 1080))
@@ -192,6 +208,59 @@ enum OverlayChecks {
         let image = CIContext().createCGImage(CIImage(cvPixelBuffer: idle.imageBuffer!),
             from: CGRect(x: 0, y: 0, width: 1920, height: 1080))!
         try check(try codes(image).isEmpty, "Idle extension output contains no fundraising overlay")
+    }
+
+    static func checkQRCodeLifecycle(camera: CVPixelBuffer, time: CMTime) throws {
+        let compositor = try FrameCompositor(configuration: OverlayConfiguration(), logo: nil)
+        let appOutput = try VideoFrameRenderer(format: VideoFormat(width: 1920, height: 1080))
+        let meetingOutput = try VideoFrameRenderer(format: VideoFormat(width: 640, height: 360))
+        let context = CIContext()
+        func convertedCodes(_ sample: CMSampleBuffer) throws -> [String] {
+            let image = context.createCGImage(CIImage(cvPixelBuffer: sample.imageBuffer!),
+                from: CGRect(x: 0, y: 0, width: 640, height: 360))!
+            return try codes(image)
+        }
+        for corner in OverlayConfiguration.Corner.allCases {
+            let settings = OverlayConfiguration(qrURL: "https://example.com/" + String(repeating: corner.rawValue, count: 40),
+                                                corner: corner)
+            try compositor.configure(settings)
+            let captured = try compositor.render(camera, at: time)
+            let sent = try appOutput.render(captured.imageBuffer, at: time)
+            // Attachments must remain property-list values when transported to the extension.
+            let attachments = CVBufferCopyAttachments(sent.imageBuffer!, .shouldPropagate)!
+            let data = try PropertyListSerialization.data(fromPropertyList: attachments, format: .binary, options: 0)
+            let restored = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as! CFDictionary
+            CVBufferSetAttachments(sent.imageBuffer!, restored, .shouldPropagate)
+            let received = try meetingOutput.render(sent.imageBuffer, at: time)
+            try check(try convertedCodes(received) == [settings.qrURL],
+                      "Two-stage conversion updates cached QR URL and position: \(corner.rawValue)")
+            try check(FrameQRCode(received.imageBuffer!)?.url == settings.qrURL,
+                      "Converted frames retain serializable QR metadata: \(corner.rawValue)")
+        }
+        compositor.isOverlayEnabled = false
+        // Exceed the pool size to exercise metadata removal on reused buffers.
+        for _ in 0..<10 {
+            try autoreleasepool {
+                let captured = try compositor.render(camera, at: time)
+                let sent = try appOutput.render(captured.imageBuffer, at: time)
+                let received = try meetingOutput.render(sent.imageBuffer, at: time)
+                try check(FrameQRCode(received.imageBuffer!) == nil && convertedCodes(received).isEmpty,
+                          "Bypassed output does not restore a cached QR on reused buffers")
+            }
+        }
+        let idle = try meetingOutput.render(nil, at: time)
+        try check(FrameQRCode(idle.imageBuffer!) == nil && convertedCodes(idle).isEmpty,
+                  "Idle output drops QR metadata and cached artwork")
+        compositor.isOverlayEnabled = true
+        let captured = try compositor.render(camera, at: time)
+        let sent = try appOutput.render(captured.imageBuffer, at: time)
+        let received = try meetingOutput.render(sent.imageBuffer, at: time)
+        try check(try convertedCodes(received) == [compositor.configuration.qrURL],
+                  "Re-enabling the overlay restores the current QR after bypass and idle")
+        let tinyFormat = VideoFormat(width: 320, height: 180)
+        let tiny = try VideoFrameRenderer(format: tinyFormat).render(sent.imageBuffer, at: time)
+        try check(VideoFormat(tiny.imageBuffer!) == tinyFormat,
+                  "An output too small for whole QR modules still delivers video")
     }
 
     static func main() {
