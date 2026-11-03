@@ -5,6 +5,16 @@
     <link>https://github.com/grahamgilbert/movembercam/releases</link>
     <description>Prerelease updates for MovemberCam</description>
     <item>
+      <title>MovemberCam 1.0.6</title>
+      <pubDate>Tue, 03 Nov 2026 20:18:54 +0000</pubDate>
+      <sparkle:version>18</sparkle:version>
+      <sparkle:shortVersionString>1.0.6</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <link>https://github.com/grahamgilbert/movembercam/releases/tag/v1.0.6</link>
+      <sparkle:releaseNotesLink sparkle:edSignature="X5ugZVXlofLNRqMtX4PDxAKyi/kN1ZWgw/mN2f3ZgO5/RyeasPCJjRPQ0Ua7WmwIV4+6FR/g2w7QRmrbtshnCA==" length="452">https://github.com/grahamgilbert/movembercam/releases/download/v1.0.6/release-notes-1.0.6.html</sparkle:releaseNotesLink>
+      <enclosure url="https://github.com/grahamgilbert/movembercam/releases/download/v1.0.6/MovemberCam-1.0.6.dmg" length="1925313" type="application/octet-stream" sparkle:edSignature="jwEd5wX4s3Wqo/MkQE8mzTG+sbbcmsOhCvp8yQK73z70hx9VIicCvVVj8H3NqBuAlrha17sqH0nKf6McZYDMAw==" />
+    </item>
+    <item>
       <title>MovemberCam 1.0.5</title>
       <pubDate>Tue, 03 Nov 2026 19:17:45 +0000</pubDate>
       <sparkle:version>17</sparkle:version>
@@ -56,6 +66,6 @@
     </item>
   </channel>
 </rss><!-- sparkle-signatures:
-edSignature: WKq5pXy2lXxEGhyTjW/AoAOYFHYpqm+C3jHhqilEymsW9YRuiI00cX/HsITzBXvv44frJ5aojrZudmYV5NacBw==
-length: 5055
+edSignature: wcjAZJ2SHpPIkxqf0KLtDR3nQMxtBfxloZX6ZhoQ5EKgwhrw++kOBMEIItvC26NQYDJfFZHivzuGX/MMe0uHCQ==
+length: 5999
 -->
