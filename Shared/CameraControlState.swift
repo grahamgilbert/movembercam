@@ -28,13 +28,19 @@ struct CameraControlState {
 /// Suspending for extension replacement must not discard existing consumer demand.
 struct CameraCaptureDemand {
     private(set) var isRequested = false
+    private(set) var isPreviewVisible = false
     var isSuspended = false
     var hasFailed = false
 
     mutating func update(_ requested: Bool) {
         isRequested = requested
-        if !requested { hasFailed = false }
+        if !requested && !isPreviewVisible { hasFailed = false }
     }
 
-    var shouldCapture: Bool { isRequested && !isSuspended && !hasFailed }
+    mutating func showPreview(_ visible: Bool) {
+        if visible != isPreviewVisible { hasFailed = false }
+        isPreviewVisible = visible
+    }
+
+    var shouldCapture: Bool { (isRequested || isPreviewVisible) && !isSuspended && !hasFailed }
 }

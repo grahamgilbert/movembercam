@@ -49,4 +49,29 @@ final class CameraControlStateTests: XCTestCase {
         demand.update(true)
         XCTAssertTrue(demand.shouldCapture)
     }
+
+    func testPreviewAndVirtualConsumersIndependentlyKeepCaptureRunning() {
+        var demand = CameraCaptureDemand()
+        demand.showPreview(true)
+        XCTAssertTrue(demand.shouldCapture)
+        demand.update(true)
+        demand.showPreview(false)
+        XCTAssertTrue(demand.shouldCapture)
+        demand.update(false)
+        XCTAssertFalse(demand.shouldCapture)
+        demand.showPreview(true)
+        demand.update(false)
+        XCTAssertTrue(demand.shouldCapture)
+    }
+
+    func testIdleVirtualSnapshotDoesNotRetryAFailedPreview() {
+        var demand = CameraCaptureDemand()
+        demand.showPreview(true)
+        demand.hasFailed = true
+        demand.update(false)
+        XCTAssertFalse(demand.shouldCapture)
+        demand.showPreview(false)
+        demand.showPreview(true)
+        XCTAssertTrue(demand.shouldCapture)
+    }
 }

@@ -185,6 +185,11 @@ final class AppModel: ObservableObject {
         reconcileCapture()
     }
 
+    func setPreviewVisible(_ visible: Bool) {
+        demand.showPreview(visible)
+        reconcileCapture()
+    }
+
     private func reconcileCapture() {
         guard !isBusy, !isShuttingDown else { return }
         if demand.shouldCapture && !selectedCameraID.isEmpty {

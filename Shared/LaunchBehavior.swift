@@ -1,4 +1,4 @@
-/// Relaunch restores Settings; live virtual-camera demand alone controls capture.
+/// Relaunch restores Settings; current preview and virtual-camera demand control capture.
 struct LaunchBehavior {
     let showSettings: Bool
 

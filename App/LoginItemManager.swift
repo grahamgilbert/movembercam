@@ -34,7 +34,7 @@ struct LoginItemControls: View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle("Open at Login", isOn: Binding(get: { manager.isEnabled }, set: manager.setEnabled))
                 .disabled(manager.isBusy)
-            Text("Opens MovemberCam in the menu bar. Your camera starts when a video app uses MovemberCam.")
+            Text("Opens MovemberCam in the menu bar. Your camera starts when you open Settings or a video app uses MovemberCam.")
                 .font(.caption).foregroundStyle(.secondary)
             if manager.status == .requiresApproval {
                 Text("Approve MovemberCam in Login Items to finish enabling automatic startup.")

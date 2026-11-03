@@ -1,13 +1,32 @@
 import SwiftUI
 import Carbon
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var shutdown: ((@escaping () -> Void) -> Void)?
     var openSettings: (() -> Void)?
+    private weak var model: AppModel?
+    private var finishedLaunching = false
+    private var windowObservers: [NSObjectProtocol] = []
 
     @MainActor
     func settingsDidAppear(model: AppModel) {
+        self.model = model
         shutdown = { completion in model.shutdown(completion: completion) }
+        if windowObservers.isEmpty {
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didChangeOcclusionStateNotification,
+                         NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification,
+                         NSWindow.willCloseNotification] {
+                windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                    MainActor.assumeIsolated {
+                        guard let self, let window = notification.object as? NSWindow,
+                              window.title == "MovemberCam" else { return }
+                        self.updatePreviewVisibility(closing: name == NSWindow.willCloseNotification)
+                    }
+                })
+            }
+        }
+        updatePreviewVisibility()
     }
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -18,8 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             event?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == keyAELaunchedAsLogInItem
         RunLoop.main.perform(inModes: [.common]) {
             MainActor.assumeIsolated {
+                self.finishedLaunching = true
                 if atLogin { self.settingsWindow?.orderOut(nil) }
                 else { self.showSettingsWindow() }
+                self.updatePreviewVisibility()
             }
         }
     }
@@ -34,7 +55,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let settingsWindow { settingsWindow.makeKeyAndOrderFront(nil) }
         else { openSettings?() }
         NSApp.activate(ignoringOtherApps: true)
+        updatePreviewVisibility()
     }
+    private func updatePreviewVisibility(closing: Bool = false) {
+        // Wait until login launch has hidden Settings before considering preview demand.
+        guard finishedLaunching else { return }
+        let window = settingsWindow
+        model?.setPreviewVisible(!closing && window?.isVisible == true && window?.isMiniaturized == false && !NSApp.isHidden)
+    }
+    func applicationDidHide(_ notification: Notification) { updatePreviewVisibility() }
+    func applicationDidUnhide(_ notification: Notification) { updatePreviewVisibility() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let shutdown else { return .terminateNow }

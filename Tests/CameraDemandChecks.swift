@@ -192,6 +192,35 @@ final class CameraEngine {
         try check(!blocked.cameraDenied && blockedEngine.starts.count == 1,
                   "Granting access in System Settings resumes an active consumer")
         blocked.shutdown {}
+
+        let preview = AppModel(defaults: defaults, cameraAuthorization: { .authorized })
+        let previewEngine = CameraEngine.latest!
+        preview.setPreviewVisible(true)
+        await settle()
+        try check(previewEngine.starts.count == 1, "Opening Settings starts capture without a virtual consumer")
+        previewEngine.finishStart()
+        await settle()
+        previewEngine.onDemand?(true)
+        await settle()
+        preview.setPreviewVisible(false)
+        await settle()
+        try check(preview.isRunning && previewEngine.stops == 0,
+                  "Closing Settings preserves capture for an active video app")
+        previewEngine.onDemand?(false)
+        await settle()
+        try check(!preview.isRunning && previewEngine.stops == 1,
+                  "Closing the last preview or virtual consumer releases capture")
+        preview.setPreviewVisible(true)
+        await settle()
+        previewEngine.finishStart()
+        await settle()
+        previewEngine.onDemand?(false)
+        await settle()
+        try check(preview.isRunning, "Idle virtual camera does not stop the open Settings preview")
+        preview.setPreviewVisible(false)
+        await settle()
+        try check(!preview.isRunning, "Closing Settings alone releases a preview-only capture")
+        preview.shutdown {}
     }
 
     static func main() async {

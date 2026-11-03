@@ -78,7 +78,7 @@ struct MainWindow: View {
                 }
                 .disabled(model.isBusy)
                 Button("Refresh Cameras", action: model.retryCamera)
-                Text("Your camera starts when a video app uses MovemberCam and stops when it is no longer in use.")
+                Text("Your camera runs while this preview is open or a video app uses MovemberCam.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

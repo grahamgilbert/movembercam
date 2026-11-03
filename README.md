@@ -9,10 +9,10 @@ MovemberCam adds a fundraising QR code, a link, and the Movember logo to your ca
 ## Install
 
 1. Open the downloaded DMG and drag **MovemberCam** into **Applications**.
-2. Open MovemberCam and click **Allow Camera Access…** to grant camera permission.
+2. Open MovemberCam and allow camera access when prompted.
 3. Click **Install Virtual Camera** beneath the preview and approve the extension when macOS prompts you. Wait for **Virtual camera ready**, or follow the instructions to restart your Mac.
 4. Choose your physical camera and enter your fundraising links in **QR destination** and **Written URL**. Click **Apply Changes**.
-5. Quit and reopen your video app, then select **MovemberCam** as its camera. Keep MovemberCam running during calls. Your physical camera starts automatically when the video app uses MovemberCam and stops when the last app stops using it.
+5. Quit and reopen your video app, then select **MovemberCam** as its camera. Keep MovemberCam running during calls. Your physical camera runs while Settings is open or a video app uses MovemberCam. Close Settings and stop using MovemberCam in video apps to release it.
 
 After an app update, MovemberCam automatically updates an older enabled camera extension and checks that the camera becomes available. It pauses capture during replacement and resumes automatically if a video app still needs it. If macOS requests approval, enable MovemberCam in **System Settings → General → Login Items & Extensions**. If the camera does not return, use **Retry Connection** and follow the restart guidance. Reopen your video app to discover updated camera formats. A disabled extension stays disabled.
 
@@ -22,11 +22,11 @@ The QR code destination and the URL displayed on screen can be different. Both d
 
 You can place the QR card at the bottom left or right and mirror the camera image while keeping the QR code and text readable. Click **Apply Changes** to save changes to the links, position, and mirroring. Camera selection and the menu bar overlay toggle save immediately.
 
-Use the mustache menu bar icon to open Settings, toggle the overlay, or quit. Turning off the overlay leaves the camera running while a video app uses it. Closing Settings also leaves the app running. The physical camera is released when no app uses MovemberCam, or when you quit MovemberCam. A video app’s settings preview can also keep the camera active.
+Use the mustache menu bar icon to open Settings, toggle the overlay, or quit. Turning off the overlay leaves the camera running while Settings is open or a video app uses it. Closing Settings also leaves the app running. The physical camera is released when Settings is closed and no app uses MovemberCam, or when you quit MovemberCam. A video app’s settings preview can also keep the camera active.
 
-MovemberCam supports built-in, USB, and Continuity cameras. Auto resolution chooses the camera's highest resolution up to 4K at 30 fps, or its nearest available frame rate. The preview shows the actual capture dimensions. The virtual camera matches common camera resolutions, including 720p, 1080p, 1440p, and 4K; your meeting app can request a different output size. Zoom may mirror the text in your self-view, but other participants receive the readable overlay. Audio uses the microphone selected in your meeting app.
+MovemberCam supports built-in, USB, and Continuity cameras. Built-in cameras use macOS’s normal high-quality video feed. For other cameras, Auto resolution chooses the highest resolution up to 4K at 30 fps, or the nearest available frame rate. The preview shows the actual capture dimensions. The virtual camera matches common camera resolutions, including 720p, 1080p, 1440p, and 4K; your meeting app can request a different output size. Zoom may mirror the text in your self-view, but other participants receive the readable overlay. Audio uses the microphone selected in your meeting app.
 
-Settings also has **Open at Login**, automatic update preferences, and **Check for Updates…**. Launching the app, including at login, leaves the camera off until a video app uses MovemberCam.
+Settings also has **Open at Login**, automatic update preferences, and **Check for Updates…**. Opening Settings starts the camera for its preview. Launching at login keeps Settings hidden and leaves the camera off until a video app uses MovemberCam.
 
 To remove the virtual camera, close apps using MovemberCam and choose **Camera → Remove Virtual Camera**.
 
