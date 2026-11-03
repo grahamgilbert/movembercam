@@ -59,6 +59,8 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     var captureSuspensionChanged: (Bool) -> Void = { _ in }
     var refreshCamera: () -> Void = {}
     var reconnectCamera: () -> Void = {}
+    var restartForStaleDiscovery: (() -> Bool)?
+    var probeFreshCamera: (@escaping (Bool) -> Void) -> Void = CameraDiscoveryProbe.run
 
     private let bundledVersion: CameraExtensionVersion?
     private let recoveryDefaults: UserDefaults
@@ -78,6 +80,8 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     private var verificationID = UUID()
     private var recoveryAttempts = 0
     private var lastCameraStatus = VirtualCameraStatus.idle(isInstalled: false)
+    private var activatedInThisProcess = false
+    private static let automaticRestartKey = "MovemberCam.automaticDiscoveryRestart"
 
     override convenience init() {
         let url = Bundle.main.bundleURL.appendingPathComponent(
@@ -306,7 +310,10 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         statusCheckError = nil
         if result == .willCompleteAfterReboot { state = .restartRequired }
         else if removing { state = .removed; refreshCamera() }
-        else { verify(resetConnection: true) }
+        else {
+            activatedInThisProcess = true
+            verify(resetConnection: true)
+        }
     }
 
     private func verify(resetConnection: Bool = false) {
@@ -340,6 +347,41 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
                 }
             } else {
                 Self.logger.error("Connection recovery exhausted cycle=\(id.uuidString, privacy: .public)")
+                self.recoverStaleDiscovery(id: id)
+            }
+        }
+    }
+
+    private func recoverStaleDiscovery(id: UUID) {
+        guard activatedInThisProcess, !lastCameraStatus.isInstalled,
+              let version = recoveryVersion, recoveryDefaults.string(forKey: Self.automaticRestartKey) != version,
+              restartForStaleDiscovery != nil else { state = .unavailable; return }
+        Self.logger.notice("Checking fresh discovery before automatic recovery cycle=\(id.uuidString, privacy: .public)")
+        probeFreshCamera { [weak self] found in
+            guard let self, self.verificationID == id, self.state == .verifying else { return }
+            guard found, !self.lastCameraStatus.isInstalled else { self.state = .unavailable; return }
+            let restartID = UUID()
+            self.verificationID = restartID
+            // Persist before launching anything. A successful connection must not
+            // reset this budget and allow a later failure to create a restart loop.
+            self.recoveryDefaults.set(version, forKey: Self.automaticRestartKey)
+            guard self.restartForStaleDiscovery?() == true else {
+                Self.logger.error("Automatic discovery recovery could not start")
+                self.state = .unavailable
+                return
+            }
+            self.noteAppRestart()
+            Self.logger.notice("Fresh process sees camera; restarting app once to refresh stale CMIO discovery")
+            self.waitForAutomaticRestart(id: restartID, remaining: 20)
+        }
+    }
+
+    private func waitForAutomaticRestart(id: UUID, remaining: Int) {
+        schedule { [weak self] in
+            guard let self, self.verificationID == id, self.state == .verifying else { return }
+            if remaining > 1 { self.waitForAutomaticRestart(id: id, remaining: remaining - 1) }
+            else {
+                Self.logger.error("Automatic discovery restart did not finish")
                 self.state = .unavailable
             }
         }

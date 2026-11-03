@@ -38,13 +38,14 @@ final class AppModel: ObservableObject {
     private let requestCameraAccess: () async -> Bool
 
     init(defaults: UserDefaults = .standard,
+         restoringAfterRecovery: Bool = CommandLine.arguments.contains("--camera-recovery"),
          cameraAuthorization: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
          requestCameraAccess: @escaping () async -> Bool = { await AVCaptureDevice.requestAccess(for: .video) }) {
         self.defaults = defaults
         self.cameraAuthorization = cameraAuthorization
         self.requestCameraAccess = requestCameraAccess
         let stored = OverlayPreferences.load(from: defaults)
-        draft = stored
+        draft = OverlayPreferences.takeRecoveryDraft(from: defaults, restoring: restoringAfterRecovery) ?? stored
         applied = stored
         do {
             let engine = try CameraEngine(configuration: stored)
@@ -92,6 +93,7 @@ final class AppModel: ObservableObject {
     }
 
     var hasChanges: Bool { draft != applied }
+    func preserveDraftForRecovery() { OverlayPreferences.preserveDraft(draft, in: defaults) }
     var cameraControls: CameraControlState {
         let permission: CameraControlState.Permission
         switch cameraAuthorization() {
