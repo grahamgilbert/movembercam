@@ -6,6 +6,7 @@
     <key>CFBundleName</key><string>MovemberCam</string>
     <key>CFBundleDisplayName</key><string>MovemberCam</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>

@@ -20,7 +20,10 @@ final class CameraProvider: NSObject, CMIOExtensionProviderSource {
         try provider.addDevice(camera.device)
     }
 
-    func connect(to client: CMIOExtensionClient) throws {}
+    func connect(to client: CMIOExtensionClient) throws {
+        Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "CameraExtension")
+            .notice("Client connected pid=\(client.pid, privacy: .public)")
+    }
     func disconnect(from client: CMIOExtensionClient) { camera.disconnected(client) }
     var availableProperties: Set<CMIOExtensionProperty> { [.providerManufacturer] }
     func providerProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionProviderProperties {
@@ -32,6 +35,10 @@ final class CameraProvider: NSObject, CMIOExtensionProviderSource {
 }
 
 final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
+    private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "CameraExtension")
+    private var lastConsumeError: String?
+    private var lastConsumeErrorTime = -Double.infinity
+    private var receivedFirstFrame = false
     private(set) var device: CMIOExtensionDevice!
     private var source: CameraStream!
     private var sink: CameraStream!
@@ -43,6 +50,7 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     private var sourceClients = 0 {
         didSet {
             guard (sourceClients > 0) != (oldValue > 0) else { return }
+            Self.logger.notice("Source consumer demand=\(self.sourceClients > 0, privacy: .public) clients=\(self.sourceClients, privacy: .public)")
             source.stream.notifyPropertiesChanged([CameraStreamDemand.property:
                 CMIOExtensionPropertyState<AnyObject>(value: demandValue as NSString)])
         }
@@ -107,12 +115,16 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     func authorizeSink(_ client: CMIOExtensionClient) -> Bool {
         // CoreMediaIO supplies the authenticated client process. Keep one active output writer.
         guard client.pid > 0,
-              !sinkRunning || sinkClient?.clientID == client.clientID else { return false }
+              !sinkRunning || sinkClient?.clientID == client.clientID else {
+            Self.logger.error("Sink authorization refused pid=\(client.pid, privacy: .public) writerActive=\(self.sinkRunning, privacy: .public)")
+            return false
+        }
         sinkClient = client
         return true
     }
 
     func start(direction: CMIOExtensionStream.Direction) throws {
+        Self.logger.notice("Stream start direction=\(direction == .source ? "source" : "sink", privacy: .public)")
         if direction == .source { sourceClients += 1 }
         else {
             guard sinkClient != nil else { throw VideoError.message("The companion app has not connected.") }
@@ -136,11 +148,15 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     }
 
     func disconnected(_ client: CMIOExtensionClient) {
+        Self.logger.notice("Client disconnected pid=\(client.pid, privacy: .public)")
         if sinkClient?.clientID == client.clientID { resetSink(); stopTimerIfIdle() }
     }
 
     private func resetSink() {
+        Self.logger.notice("Sink reset generation=\(self.sinkGeneration, privacy: .public)")
         sinkRunning = false
+        receivedFirstFrame = false
+        lastConsumeError = nil
         sinkClient = nil
         sinkGeneration &+= 1
         consumePending = false
@@ -164,9 +180,24 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
                 CameraProvider.queue.async {
                     guard let self, self.sinkGeneration == generation else { return }
                     self.consumePending = false
-                    guard error == nil, let sample, let buffer = sample.imageBuffer,
+                    if let error {
+                        let failure = error as NSError
+                        let signature = "\(failure.domain):\(failure.code)"
+                        let now = ProcessInfo.processInfo.systemUptime
+                        if self.lastConsumeError != signature || now - self.lastConsumeErrorTime >= 5 {
+                            Self.logger.error("Sink consume failed domain=\(failure.domain, privacy: .public) code=\(failure.code, privacy: .public)")
+                            self.lastConsumeError = signature
+                            self.lastConsumeErrorTime = now
+                        }
+                        return
+                    }
+                    guard let sample, let buffer = sample.imageBuffer,
                           VideoFormat(buffer) == self.sink.activeFormat,
                           CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA else { return }
+                    if !self.receivedFirstFrame {
+                        self.receivedFirstFrame = true
+                        Self.logger.notice("First sink frame received format=\(self.sink.activeFormat.width, privacy: .public)x\(self.sink.activeFormat.height, privacy: .public)")
+                    }
                     let received = CMClockGetTime(CMClockGetHostTimeClock())
                     FrameQRCode.remove(from: buffer)
                     self.qrCode(at: sample.presentationTimeStamp)?.attach(to: buffer)

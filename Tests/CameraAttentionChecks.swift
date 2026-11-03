@@ -83,6 +83,9 @@ import SystemExtensions
         h.bind()
         h.approve(false)
         await settle()
+        let notificationContent = CameraIssueNotifications.content(for: h.attention.issue!)
+        try check(notificationContent.title == "Camera needs approval" && notificationContent.body == "Open MovemberCam to enable it.",
+                  "Native notifications use concise copy while Settings retains the detailed recovery steps")
         try check(h.model.isRunning && h.attention.issue?.kind == .extensionPermission && h.notifications.delivered.count == 1,
                   "Approval sends a notification even while the Settings preview is running")
         try check(h.notifications.delivered.count == 1,
@@ -109,6 +112,7 @@ import SystemExtensions
         await settle()
         try check(h.attention.issue?.title == "Camera recovery in progress",
                   "Warning stays visible with truthful progress until the virtual camera connects")
+        try check(h.engine.reconnects == 1, "Approval automatically resets the local output connection without restarting capture")
         h.engine.onOutputStatus?(.idle(isInstalled: true))
         await settle()
         try check(h.installer.isReady && h.attention.issue == nil && h.notifications.clears > 0,

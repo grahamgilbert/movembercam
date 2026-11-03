@@ -43,6 +43,11 @@ enum CameraExtensionUpdateState: Equatable {
     case awaitingActivation, verifying, ready, restartRequired, unavailable, removing, removed
     case failed(String)
 
+    var diagnosticName: String {
+        if case .failed = self { return "failed" }
+        return String(describing: self)
+    }
+
     var busy: Bool {
         switch self {
         case .checking, .installing, .awaitingActivation, .verifying, .removing: return true

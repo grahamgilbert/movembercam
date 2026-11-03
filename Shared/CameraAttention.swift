@@ -23,6 +23,18 @@ struct CameraAttentionIssue: Equatable {
         }
     }
 
+    var notificationCopy: (title: String, body: String) {
+        switch kind {
+        case .extensionPermission: return ("Camera needs approval", "Open MovemberCam to enable it.")
+        case .missingExtension: return ("Set up your virtual camera", "Open MovemberCam to finish setup.")
+        case .extensionFailure: return ("Camera connection failed", "Open MovemberCam to reconnect.")
+        case .restartRequired: return ("Restart your Mac", "Restart to finish camera setup.")
+        case .cameraPermission: return ("Allow camera access", "Open MovemberCam to allow access.")
+        case .missingCamera: return ("No camera connected", "Connect a camera, then open MovemberCam.")
+        case .captureFailure: return ("Camera stopped", "Open MovemberCam to reconnect.")
+        }
+    }
+
     let kind: Kind
     let title: String
     let message: String

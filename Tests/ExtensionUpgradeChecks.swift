@@ -12,6 +12,7 @@ import SystemExtensions
         var requests: [OSSystemExtensionRequest] = []
         var ticks: [() -> Void] = []
         var paused = false
+        var reconnects = 0
         var suspensions: [Bool] = []
         let defaults: UserDefaults
         private let suite: String?
@@ -29,6 +30,7 @@ import SystemExtensions
                 canInstall: true, submit: { [unowned self] in self.requests.append($0) },
                 schedule: { [unowned self] in self.ticks.append($0) }, recoveryDefaults: self.defaults)
             value.prepareForActivation = { [unowned self] completion in self.paused = true; completion() }
+            value.reconnectCamera = { [unowned self] in self.reconnects += 1 }
             value.captureSuspensionChanged = { [unowned self] in self.suspensions.append($0) }
             return value
         }()
@@ -60,6 +62,7 @@ import SystemExtensions
                   "System Settings remains actionable while macOS is waiting for approval")
         update.installer.request(activation, didFinishWithResult: .completed)
         try check(update.installer.state == .verifying, "Activation completion waits for device discovery")
+        try check(update.reconnects == 1, "Activation reconnects the app sink without relaunching or reinstalling")
         try check(!update.installer.blocksCapture && update.suspensions == [true, false],
                   "Leaving installation allows consumer demand to control capture again")
         update.installer.observeCameraStatus(.requiresUpdate)
@@ -69,6 +72,13 @@ import SystemExtensions
         update.installer.observeCameraStatus(.idle(isInstalled: true))
         update.drain()
         try check(update.installer.isReady && update.requests.count == 1, "A usable camera completes verification and cancels pending retry timers")
+        update.installer.observeCameraStatus(.connecting)
+        try check(update.installer.state == .verifying && update.reconnects == 1,
+                  "A connecting event starts bounded verification without resetting the same in-flight connection")
+        update.installer.observeCameraStatus(.sending)
+        update.drain()
+        try check(update.installer.isReady && update.reconnects == 1,
+                  "A newly connected sink completes verification without a reconnect feedback loop")
         update.installer.uninstall()
         update.installer.request(update.requests.last!, didFinishWithResult: .completed)
         try check(update.installer.state == .removed, "Uninstallation reports removal rather than update success")
@@ -96,12 +106,18 @@ import SystemExtensions
         recovery.installer.install()
         recovery.installer.request(recovery.requests[0], didFinishWithResult: .completed)
         recovery.drain()
-        try check(recovery.requests.count == 2 && recovery.installer.state == .installing,
-                  "Missing device triggers one delayed registration retry")
-        recovery.installer.request(recovery.requests[1], didFinishWithResult: .completed)
-        recovery.drain()
-        try check(recovery.requests.count == 2 && recovery.installer.state == .unavailable && !recovery.installer.busy,
-                  "Failed recovery stops retrying and explains settings and Mac restart recovery")
+        try check(recovery.requests.count == 1 && recovery.reconnects == 2,
+                  "A stalled connection retries the local sink once without reinstalling the extension")
+        try check(recovery.installer.state == .unavailable && !recovery.installer.busy,
+                  "Failed local recovery ends verification and exposes restart recovery after a bounded wait")
+        for _ in 0..<4 {
+            recovery.installer.refresh()
+            recovery.installer.receiveInstalled([entry()], for: recovery.requests.last!)
+            recovery.installer.observeCameraStatus(.cannotStart(-4))
+            recovery.drain()
+        }
+        try check(recovery.installer.state == .unavailable && recovery.reconnects == 2,
+                  "Enabled background status checks cannot restart exhausted recovery or hide its failure")
         recovery.installer.request(recovery.requests[0], didFinishWithResult: .completed)
         try check(recovery.installer.state == .unavailable, "Stale request completions cannot overwrite recovery guidance")
         try check(recovery.installer.recoveryAction == .restartApp, "Unavailable camera offers one app-restart action")
@@ -110,7 +126,7 @@ import SystemExtensions
         try check(!recovery.installer.needsApproval && recovery.installer.message.contains("already enabled"),
                   "A failed connection after restart does not falsely claim camera permission is disabled")
         recovery.installer.observeCameraStatus(.idle(isInstalled: true))
-        try check(recovery.installer.isReady && recovery.requests.count == 2,
+        try check(recovery.installer.isReady && recovery.reconnects == 2,
                   "Late camera discovery clears recovery guidance without another activation")
         try checkApprovalRecovery()
         print("\(checks) extension upgrade checks passed")

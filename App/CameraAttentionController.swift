@@ -50,6 +50,7 @@ final class CameraAttentionController: ObservableObject {
         installer.prepareForActivation = model.prepareForExtensionUpdate
         installer.captureSuspensionChanged = model.setCaptureSuspended
         installer.refreshCamera = model.refreshCameras
+        installer.reconnectCamera = model.reconnectVirtualCamera
         model.setCaptureSuspended(installer.blocksCapture)
 
         model.$virtualCameraStatus.receive(on: DispatchQueue.main).sink { [weak installer] status in

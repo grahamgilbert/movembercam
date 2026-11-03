@@ -1,5 +1,6 @@
 import CoreMediaIO
 import Foundation
+import os
 
 /// CoreMediaIO work runs on its own serial queue. Capture hands off just the latest frame.
 final class VirtualCameraOutput {
@@ -9,6 +10,12 @@ final class VirtualCameraOutput {
     private let lock = NSLock()
     private var pending: CMSampleBuffer?
     private var scheduled = false
+    private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "VirtualOutput")
+    private var health = VirtualCameraConnectionHealth()
+    private var observedDevices: [CMIODeviceID] = []
+    private var supportsDemand = false
+    private var lastFailureStage: String?
+    private var queueIsFull = false
     private var device: CMIODeviceID = 0
     private var stream: CMIOStreamID = 0
     private var bufferQueue: CMSimpleQueue?
@@ -21,7 +28,12 @@ final class VirtualCameraOutput {
     private var demandTimer: DispatchSourceTimer?
     private var requested: Bool?
     private var status = VirtualCameraStatus.idle(isInstalled: false) {
-        didSet { if status != oldValue { onStatus?(status) } }
+        didSet {
+            if status != oldValue {
+                Self.logger.notice("Output status \(oldValue.message, privacy: .public) -> \(self.status.message, privacy: .public)")
+                onStatus?(status)
+            }
+        }
     }
 
     init() {
@@ -36,7 +48,7 @@ final class VirtualCameraOutput {
         // missed notifications and discovers a replacement extension after an update.
         let timer = DispatchSource.makeTimerSource(queue: worker)
         timer.schedule(deadline: .now(), repeating: .milliseconds(500))
-        timer.setEventHandler { [weak self] in self?.refreshDemandOnWorker() }
+        timer.setEventHandler { [weak self] in self?.refreshAvailabilityOnWorker(forceDemand: false) }
         demandTimer = timer
         timer.resume()
     }
@@ -63,23 +75,35 @@ final class VirtualCameraOutput {
         worker.async { self.refreshAvailabilityOnWorker() }
     }
 
-    private func refreshAvailabilityOnWorker() {
-        let devices = matchingDeviceIDs()
-        let supportsDemand = refreshDemandOnWorker(force: true)
-        if bufferQueue != nil {
-            if devices.contains(device) { status = .sending } else { stopOnWorker() }
-        } else {
-            status = devices.isEmpty ? .notInstalled : supportsDemand ? .idle(isInstalled: true) : .requiresUpdate
+    /// Tear down the app's old sink connection after activation; leave physical capture and video clients running.
+    func reconnect() {
+        worker.async {
+            Self.logger.notice("Reconnecting virtual camera locally")
+            self.stopOnWorker(preserveCapture: true)
+            self.refreshAvailabilityOnWorker()
         }
-        // Also deliver unchanged snapshots after AppModel attaches its observer.
-        onStatus?(status)
+    }
+
+    private func refreshAvailabilityOnWorker(forceDemand: Bool = true) {
+        let devices = matchingDeviceIDs()
+        if devices != observedDevices {
+            Self.logger.notice("Discovery device count=\(devices.count, privacy: .public) ids=\(String(describing: devices), privacy: .public)")
+            observedDevices = devices
+            if device != 0 && !devices.contains(device) { stopOnWorker(preserveCapture: true) }
+            health.reset()
+            lastFailureStage = nil
+        }
+        supportsDemand = refreshDemandOnWorker(devices: devices, force: forceDemand)
+        status = health.status(isInstalled: !devices.isEmpty, supportsDemand: supportsDemand)
+        // Deliver unchanged snapshots too: installation verification may have started since the last event.
+        if forceDemand { onStatus?(status) }
     }
 
     @discardableResult
-    private func refreshDemandOnWorker(force: Bool = false) -> Bool {
-        let devices = matchingDeviceIDs()
+    private func refreshDemandOnWorker(devices: [CMIODeviceID], force: Bool = false) -> Bool {
         var needed = false
         var supportsDemand = false
+        var readFailed = false
         for id in devices {
             let sources = objectIDs(id, selector: kCMIODevicePropertyStreams, scope: kCMIODevicePropertyScopeInput)
             for source in sources {
@@ -90,11 +114,18 @@ final class VirtualCameraOutput {
                 var used: UInt32 = 0
                 let result = CMIOObjectGetPropertyData(source, &property, 0, nil,
                     UInt32(MemoryLayout.size(ofValue: value)), &used, &value)
-                if result == noErr, let value = value?.takeRetainedValue(), value as String == "1" { needed = true }
+                if result == noErr, let value = value?.takeRetainedValue() {
+                    if value as String == "1" { needed = true }
+                } else if result != noErr {
+                    readFailed = true
+                    recordFailure(.cannotOpen(result), stage: "read-demand")
+                }
             }
         }
-        if !devices.isEmpty && !supportsDemand { status = .requiresUpdate }
+        // A transient failed property read is not evidence that every consumer closed.
+        if readFailed && !needed { needed = requested ?? false }
         if force || requested != needed {
+            if requested != needed { Self.logger.notice("Video consumer demand=\(needed, privacy: .public)") }
             requested = needed
             onDemand?(needed)
         }
@@ -116,8 +147,9 @@ final class VirtualCameraOutput {
 
     private func sendOnWorker(_ sample: CMSampleBuffer) {
         guard let input = sample.imageBuffer else { return }
+        health.expectsFrames = true
         let incoming = VideoFormat(input)
-        if bufferQueue != nil, incoming != inputFormat { stopOnWorker() }
+        if bufferQueue != nil, incoming != inputFormat { stopOnWorker(preserveCapture: true) }
         let now = CFAbsoluteTimeGetCurrent()
         if now - lastProbe > 1 {
             lastProbe = now
@@ -127,14 +159,29 @@ final class VirtualCameraOutput {
                 var used: UInt32 = 0
                 let result = CMIOObjectGetPropertyData(device, &address, 0, nil,
                     UInt32(MemoryLayout.size(ofValue: alive)), &used, &alive)
-                if result != noErr || alive == 0 { stopOnWorker() }
+                if result != noErr || alive == 0 {
+                    Self.logger.warning("Sink device stopped responding code=\(result, privacy: .public)")
+                    stopOnWorker(preserveCapture: true)
+                }
             }
             if bufferQueue == nil { connect(format: incoming) }
         }
         guard CMClockGetTime(CMClockGetHostTimeClock()).seconds - sample.presentationTimeStamp.seconds < 0.25,
-              let bufferQueue, let renderer,
-              CMSimpleQueueGetCount(bufferQueue) < CMSimpleQueueGetCapacity(bufferQueue),
-              let output = try? renderer.render(input, at: sample.presentationTimeStamp) else { return }
+              let bufferQueue, let renderer else { return }
+        if CMSimpleQueueGetCount(bufferQueue) >= CMSimpleQueueGetCapacity(bufferQueue) {
+            if !queueIsFull { Self.logger.warning("Sink queue full; waiting for extension to consume frames") }
+            queueIsFull = true
+            return
+        }
+        if queueIsFull { Self.logger.notice("Sink queue consuming frames again") }
+        queueIsFull = false
+        let output: CMSampleBuffer
+        do { output = try renderer.render(input, at: sample.presentationTimeStamp) }
+        catch {
+            if case VideoError.operation(_, kCVReturnWouldExceedAllocationThreshold) = error { return }
+            recordFailure(.cannotOpen(OSStatus(kCMIOHardwareUnspecifiedError)), stage: "render-frame")
+            return
+        }
         let qrCode = output.imageBuffer.flatMap(FrameQRCode.init)
         if !didSendQRCode || qrCode != sentQRCode {
             var property = address(Int(FrameQRCode.controlSelector))
@@ -148,14 +195,20 @@ final class VirtualCameraOutput {
                     CMIOObjectSetPropertyData(stream, &property, 0, nil,
                         UInt32(MemoryLayout.size(ofValue: unmanaged)), &unmanaged)
                 }
-                guard result == noErr else { status = .cannotOpen(result); return }
+                guard result == noErr else { recordFailure(.cannotOpen(result), stage: "write-overlay-control"); return }
             }
             sentQRCode = qrCode
             didSendQRCode = true
         }
         let retained = Unmanaged.passRetained(output)
-        if CMSimpleQueueEnqueue(bufferQueue, element: retained.toOpaque()) != noErr {
+        let result = CMSimpleQueueEnqueue(bufferQueue, element: retained.toOpaque())
+        if result != noErr {
             retained.release()
+            recordFailure(.cannotOpen(result), stage: "enqueue-frame")
+        } else {
+            health.sentFrame()
+            lastFailureStage = nil
+            status = .sending
         }
     }
 
@@ -166,14 +219,19 @@ final class VirtualCameraOutput {
         worker.sync { self.stopOnWorker() }
     }
 
-    private func stopOnWorker() {
-        if device != 0, stream != 0 { CMIODeviceStopStream(device, stream) }
+    private func stopOnWorker(preserveCapture: Bool = false) {
+        if device != 0, stream != 0 {
+            Self.logger.notice("Closing sink device=\(self.device, privacy: .public) stream=\(self.stream, privacy: .public)")
+            let result = CMIODeviceStopStream(device, stream)
+            Self.logger.info("Sink stopped device=\(self.device, privacy: .public) stream=\(self.stream, privacy: .public) code=\(result, privacy: .public)")
+        }
         if let bufferQueue {
             while let pointer = CMSimpleQueueDequeue(bufferQueue) {
                 Unmanaged<CMSampleBuffer>.fromOpaque(pointer).release()
             }
         }
         bufferQueue = nil
+        queueIsFull = false
         inputFormat = nil
         renderer = nil
         sentQRCode = nil
@@ -181,13 +239,19 @@ final class VirtualCameraOutput {
         device = 0
         stream = 0
         lastProbe = 0
-        status = .idle(isInstalled: !matchingDeviceIDs().isEmpty)
+        health.reset()
+        if !preserveCapture { health.expectsFrames = false }
+        lastFailureStage = nil
+        status = preserveCapture ? .connecting : health.status(isInstalled: !observedDevices.isEmpty, supportsDemand: supportsDemand)
     }
 
     private func connect(format inputFormat: VideoFormat) {
         for id in matchingDeviceIDs() {
             let streams = objectIDs(id, selector: kCMIODevicePropertyStreams, scope: kCMIODevicePropertyScopeOutput)
-            guard let sink = streams.first else { continue }
+            guard let sink = streams.first else {
+                recordFailure(.cannotOpen(OSStatus(kCMIOHardwareBadStreamError)), stage: "find-sink")
+                continue
+            }
             let descriptions = formatDescriptions(sink)
             let formats = descriptions.map { description -> VideoFormat in
                 let size = CMVideoFormatDescriptionGetDimensions(description)
@@ -195,28 +259,29 @@ final class VirtualCameraOutput {
             }
             guard let selected = inputFormat.bestMatch(in: formats), let index = formats.firstIndex(of: selected),
                   let renderer = try? VideoFrameRenderer(format: selected) else {
-                status = .cannotOpen(OSStatus(kCMIOHardwareUnsupportedOperationError))
+                recordFailure(.cannotOpen(OSStatus(kCMIOHardwareUnsupportedOperationError)), stage: "negotiate-format")
                 return
             }
             // Negotiate before starting the sink, including when capture changes size.
             // Read the installed extension's list so an older 720p extension still works.
+            Self.logger.info("Opening sink device=\(id, privacy: .public) stream=\(sink, privacy: .public) format=\(selected.width, privacy: .public)x\(selected.height, privacy: .public)")
             var description = Unmanaged.passUnretained(descriptions[index])
             var property = address(kCMIOStreamPropertyFormatDescription)
             let formatResult = CMIOObjectSetPropertyData(sink, &property, 0, nil,
                 UInt32(MemoryLayout.size(ofValue: description)), &description)
             guard formatResult == noErr else {
-                status = .cannotOpen(formatResult)
+                recordFailure(.cannotOpen(formatResult), stage: "set-format")
                 return
             }
             var unmanagedQueue: Unmanaged<CMSimpleQueue>?
             let queueResult = CMIOStreamCopyBufferQueue(sink, { _, _, _ in }, nil, &unmanagedQueue)
             guard queueResult == noErr, let queue = unmanagedQueue?.takeRetainedValue() else {
-                status = .cannotOpen(queueResult)
+                recordFailure(.cannotOpen(queueResult), stage: "copy-buffer-queue")
                 return
             }
             let startResult = CMIODeviceStartStream(id, sink)
             guard startResult == noErr else {
-                status = .cannotStart(startResult)
+                recordFailure(.cannotStart(startResult), stage: "start-sink")
                 return
             }
             device = id
@@ -224,10 +289,20 @@ final class VirtualCameraOutput {
             bufferQueue = queue
             self.inputFormat = inputFormat
             self.renderer = renderer
-            status = .sending
+            Self.logger.notice("Sink opened; waiting for first frame")
+            status = .connecting
             return
         }
         status = .notInstalled
+    }
+
+    private func recordFailure(_ failure: VirtualCameraStatus, stage: String) {
+        if health.failure != failure || lastFailureStage != stage {
+            Self.logger.error("Sink failure stage=\(stage, privacy: .public) code=\(failure.errorCode ?? 0, privacy: .public) status=\(failure.message, privacy: .public)")
+        }
+        lastFailureStage = stage
+        health.failed(failure)
+        status = failure
     }
 
     private func formatDescriptions(_ stream: CMIOStreamID) -> [CMFormatDescription] {

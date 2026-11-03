@@ -126,6 +126,8 @@ final class AppModel: ObservableObject {
         do { _ = try draft.validated(); return nil } catch { return error.localizedDescription }
     }
 
+    func reconnectVirtualCamera() { engine?.reconnectVirtualCamera() }
+
     func retryCamera() {
         demand.hasFailed = false
         refreshCameras()

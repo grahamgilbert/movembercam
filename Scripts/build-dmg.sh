@@ -54,8 +54,7 @@ if [[ -n "$provided_app" ]]; then
   app_path="$(cd "$(dirname "$provided_app")" && pwd)/$(basename "$provided_app")"
 else
   swift -module-cache-path build/ModuleCache.noindex Scripts/RenderAppIcon.swift \
-    "$project_root/Resources/MovemberMo.png" "$project_root/build/icon-artwork"
-  iconutil -c icns build/icon-artwork/AppIcon.iconset -o Resources/AppIcon.icns
+    "$project_root/Resources/MovemberMo.png" "$project_root/build/icon-artwork" "$project_root/Resources/Assets.xcassets"
   if command -v xcodegen >/dev/null 2>&1; then xcodegen generate; fi
   archive_path="$project_root/build/dmg/MovemberCam.xcarchive"
   export_path="$project_root/build/dmg/export"
@@ -109,6 +108,7 @@ PY
 fi
 
 [[ -d "$app_path" ]] || { printf 'App not found: %s\n' "$app_path" >&2; exit 1; }
+python3 Scripts/verify-app-resources.py "$app_path"
 codesign --verify --deep --strict "$app_path"
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")"
 app_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
