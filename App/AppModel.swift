@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
     var outputStatus: String { virtualCameraStatus.message }
     @Published private(set) var selectedCameraID = ""
     let previewFeed = VideoPreviewFeed()
+    @Published private(set) var previewFormat = VideoFormat.hd720
     @Published var isRunning = false
     @Published var isBusy = false
     @Published var isApplying = false
@@ -37,7 +38,14 @@ final class AppModel: ObservableObject {
             self.engine = engine
             isOverlayEnabled = UserDefaults.standard.object(forKey: "MovemberCam.overlayEnabled") as? Bool ?? true
             engine.setOverlayEnabled(isOverlayEnabled)
-            engine.onPreview = { [weak self] sample in self?.previewFeed.sample = sample }
+            engine.onPreview = { [weak self] sample in
+                guard let self else { return }
+                if let buffer = sample.imageBuffer {
+                    let format = VideoFormat(buffer)
+                    if format != self.previewFormat { self.previewFormat = format }
+                }
+                self.previewFeed.sample = sample
+            }
             engine.onOutputStatus = { [weak self] status in Task { @MainActor in self?.virtualCameraStatus = status } }
             engine.onFailure = { [weak self] message in
                 Task { @MainActor in
@@ -170,7 +178,11 @@ final class AppModel: ObservableObject {
         stop(restarting: false)
     }
 
-    private func stop(restarting: Bool) {
+    func prepareForExtensionUpdate(_ completion: @escaping () -> Void) {
+        stop(restarting: false, completion: completion)
+    }
+
+    private func stop(restarting: Bool, completion: (() -> Void)? = nil) {
         let token = UUID()
         generation = token
         isBusy = true
@@ -181,9 +193,10 @@ final class AppModel: ObservableObject {
                 self.isBusy = false
                 self.virtualCameraStatus = .idle(isInstalled: self.virtualCameraAvailable)
                 if restarting { self.start() }
+                completion?()
             }
         }
-        if engine == nil { isRunning = false; isBusy = false }
+        if engine == nil { isRunning = false; isBusy = false; completion?() }
     }
 
     func shutdown(completion: @escaping () -> Void) {

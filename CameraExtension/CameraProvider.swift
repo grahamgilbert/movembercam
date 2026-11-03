@@ -35,8 +35,9 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     private(set) var device: CMIOExtensionDevice!
     private var source: CameraStream!
     private var sink: CameraStream!
-    private let videoDescription: CMVideoFormatDescription
-    private let blank: CVPixelBuffer
+    private var renderer: VideoFrameRenderer
+    private var qrUpdates: [FrameQRCodeUpdate] = []
+    private(set) var qrControlValue = ""
     private var latest: CVPixelBuffer?
     private var latestTime = -Double.infinity
     private var sourceClients = 0
@@ -47,27 +48,16 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     private var timer: DispatchSourceTimer?
 
     init(configure: Bool) throws {
-        videoDescription = try VideoFormat.description()
-        let pool = try VideoFormat.pool()
-        var buffer: CVPixelBuffer?
-        let status = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &buffer)
-        guard status == kCVReturnSuccess, let buffer else { throw VideoError.operation("Create idle frame", status) }
-        blank = buffer
-        CVPixelBufferLockBaseAddress(buffer, [])
-        if let base = CVPixelBufferGetBaseAddress(buffer) {
-            for row in 0..<VideoFormat.height {
-                let pixels = base.advanced(by: row * CVPixelBufferGetBytesPerRow(buffer)).assumingMemoryBound(to: UInt32.self)
-                for column in 0..<VideoFormat.width { pixels[column] = 0xFF141916 }
-            }
-        }
-        CVPixelBufferUnlockBaseAddress(buffer, [])
+        renderer = try VideoFrameRenderer(format: .hd720)
         super.init()
         device = CMIOExtensionDevice(localizedName: VideoFormat.cameraName, deviceID: VideoFormat.deviceID,
                                      legacyDeviceID: nil, source: self)
-        let format = CMIOExtensionStreamFormat(formatDescription: videoDescription, maxFrameDuration: VideoFormat.duration,
-                                              minFrameDuration: VideoFormat.duration, validFrameDurations: nil)
-        source = CameraStream(owner: self, id: VideoFormat.sourceID, direction: .source, format: format)
-        sink = CameraStream(owner: self, id: VideoFormat.sinkID, direction: .sink, format: format)
+        let formats = try VideoFormat.supported.map {
+            CMIOExtensionStreamFormat(formatDescription: try $0.description(), maxFrameDuration: VideoFormat.duration,
+                                      minFrameDuration: VideoFormat.duration, validFrameDurations: nil)
+        }
+        source = CameraStream(owner: self, id: VideoFormat.sourceID, direction: .source, formats: formats)
+        sink = CameraStream(owner: self, id: VideoFormat.sinkID, direction: .sink, formats: formats)
         // AVFoundation uses the first source stream as the selectable camera.
         try device.addStream(source.stream)
         try device.addStream(sink.stream)
@@ -77,10 +67,35 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     func deviceProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionDeviceProperties {
         let result = CMIOExtensionDeviceProperties(dictionary: [:])
         if properties.contains(.deviceTransportType) { result.transportType = kIOAudioDeviceTransportTypeVirtual }
-        if properties.contains(.deviceModel) { result.model = "MovemberCam 720p" }
+        if properties.contains(.deviceModel) { result.model = "MovemberCam Auto" }
         return result
     }
     func setDeviceProperties(_ deviceProperties: CMIOExtensionDeviceProperties) throws {}
+
+    func setFormat(index: Int, direction: CMIOExtensionStream.Direction) throws {
+        if direction == .source {
+            renderer = try VideoFrameRenderer(format: VideoFormat.supported[index])
+        } else {
+            // The app selects the sink format to match its actual frames. Default the
+            // source to that format before a meeting opens it. An active meeting keeps
+            // its negotiated format, even when the physical camera changes.
+            if sourceClients == 0 { try source.selectFormat(index) }
+            latest = nil
+            latestTime = -Double.infinity
+            qrUpdates.removeAll()
+            qrControlValue = ""
+        }
+    }
+
+    func setQRCodeUpdate(_ update: FrameQRCodeUpdate, encoded: String) {
+        qrUpdates.append(update)
+        if qrUpdates.count > 16 { qrUpdates.removeFirst(qrUpdates.count - 16) }
+        qrControlValue = encoded
+    }
+
+    func qrCode(at time: CMTime) -> FrameQRCode? {
+        qrUpdates.last(where: { $0.effectiveTime <= time.seconds })?.qrCode
+    }
 
     func authorizeSink(_ client: CMIOExtensionClient) -> Bool {
         // CoreMediaIO supplies the authenticated client process. Keep one active output writer.
@@ -105,7 +120,10 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
     }
 
     func stop(direction: CMIOExtensionStream.Direction) {
-        if direction == .source { sourceClients = max(0, sourceClients - 1) }
+        if direction == .source {
+            sourceClients = max(0, sourceClients - 1)
+            if sourceClients == 0 { try? source.selectFormat(sink.activeFormatIndex) }
+        }
         else { resetSink() }
         stopTimerIfIdle()
     }
@@ -119,6 +137,8 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
         sinkClient = nil
         sinkGeneration &+= 1
         consumePending = false
+        qrUpdates.removeAll()
+        qrControlValue = ""
         latest = nil
         latestTime = -Double.infinity
     }
@@ -138,10 +158,11 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
                     guard let self, self.sinkGeneration == generation else { return }
                     self.consumePending = false
                     guard error == nil, let sample, let buffer = sample.imageBuffer,
-                          CVPixelBufferGetWidth(buffer) == VideoFormat.width,
-                          CVPixelBufferGetHeight(buffer) == VideoFormat.height,
+                          VideoFormat(buffer) == self.sink.activeFormat,
                           CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA else { return }
                     let received = CMClockGetTime(CMClockGetHostTimeClock())
+                    FrameQRCode.remove(from: buffer)
+                    self.qrCode(at: sample.presentationTimeStamp)?.attach(to: buffer)
                     self.latest = buffer
                     self.latestTime = sample.presentationTimeStamp.seconds
                     self.sink.stream.notifyScheduledOutputChanged(CMIOExtensionScheduledOutput(sequenceNumber: sequence,
@@ -152,8 +173,8 @@ final class CameraDevice: NSObject, CMIOExtensionDeviceSource {
         guard sourceClients > 0 else { return }
         // Never leave a frozen private image on a call after the app stops or crashes.
         let age = now.seconds - latestTime
-        let frame = (0...0.5).contains(age) ? (latest ?? blank) : blank
-        if let sample = try? VideoFormat.sample(frame, at: now, description: videoDescription) {
+        let frame = (0...0.5).contains(age) ? latest : nil
+        if let sample = try? renderer.render(frame, at: now) {
             source.stream.send(sample, discontinuity: [], hostTimeInNanoseconds: UInt64(now.seconds * 1_000_000_000))
         }
     }
@@ -164,11 +185,13 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
     private unowned let owner: CameraDevice
     private let direction: CMIOExtensionStream.Direction
     let formats: [CMIOExtensionStreamFormat]
+    private(set) var activeFormatIndex = 0
+    var activeFormat: VideoFormat { VideoFormat.supported[activeFormatIndex] }
 
-    init(owner: CameraDevice, id: UUID, direction: CMIOExtensionStream.Direction, format: CMIOExtensionStreamFormat) {
+    init(owner: CameraDevice, id: UUID, direction: CMIOExtensionStream.Direction, formats: [CMIOExtensionStreamFormat]) {
         self.owner = owner
         self.direction = direction
-        formats = [format]
+        self.formats = formats
         super.init()
         stream = CMIOExtensionStream(localizedName: direction == .source ? "MovemberCam.Video" : "MovemberCam.Input",
             streamID: id, direction: direction, clockType: .hostTime, source: self)
@@ -177,14 +200,18 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
     var availableProperties: Set<CMIOExtensionProperty> {
         var properties: Set<CMIOExtensionProperty> = [.streamActiveFormatIndex, .streamFrameDuration]
         if direction == .sink {
-            properties.formUnion([.streamSinkBufferQueueSize, .streamSinkBuffersRequiredForStartup])
+            properties.formUnion([.streamSinkBufferQueueSize, .streamSinkBuffersRequiredForStartup, FrameQRCode.controlProperty])
         }
         return properties
     }
 
     func streamProperties(forProperties properties: Set<CMIOExtensionProperty>) throws -> CMIOExtensionStreamProperties {
         let result = CMIOExtensionStreamProperties(dictionary: [:])
-        if properties.contains(.streamActiveFormatIndex) { result.activeFormatIndex = 0 }
+        if direction == .sink, properties.contains(FrameQRCode.controlProperty) {
+            result.setPropertyState(CMIOExtensionPropertyState<AnyObject>(value: owner.qrControlValue as NSString),
+                                    forProperty: FrameQRCode.controlProperty)
+        }
+        if properties.contains(.streamActiveFormatIndex) { result.activeFormatIndex = activeFormatIndex }
         if properties.contains(.streamFrameDuration) { result.frameDuration = VideoFormat.duration }
         if properties.contains(.streamSinkBufferQueueSize) { result.sinkBufferQueueSize = 3 }
         if properties.contains(.streamSinkBuffersRequiredForStartup) { result.sinkBuffersRequiredForStartup = 1 }
@@ -192,10 +219,32 @@ final class CameraStream: NSObject, CMIOExtensionStreamSource {
     }
 
     func setStreamProperties(_ streamProperties: CMIOExtensionStreamProperties) throws {
-        if let index = streamProperties.activeFormatIndex, index != 0 { throw VideoError.message("Only 720p is supported.") }
+        if let index = streamProperties.activeFormatIndex, !formats.indices.contains(index) {
+            throw VideoError.message("Unsupported video format.")
+        }
         if let duration = streamProperties.frameDuration, CMTimeCompare(duration, VideoFormat.duration) != 0 {
             throw VideoError.message("Only 30 fps is supported.")
         }
+        var qrUpdate: (FrameQRCodeUpdate, String)?
+        if let property = streamProperties.propertiesDictionary[FrameQRCode.controlProperty] {
+            guard direction == .sink, let value = property.value as? String else {
+                throw VideoError.message("Invalid QR control property.")
+            }
+            let format = VideoFormat.supported[streamProperties.activeFormatIndex ?? activeFormatIndex]
+            qrUpdate = (try FrameQRCodeUpdate.decode(value, format: format), value)
+        }
+        if let index = streamProperties.activeFormatIndex { try selectFormat(index) }
+        if let (update, encoded) = qrUpdate { owner.setQRCodeUpdate(update, encoded: encoded) }
+    }
+
+    func selectFormat(_ index: Int) throws {
+        // Call the owner even for the same index: selecting the initial 720p sink
+        // must still reset a source left at another resolution by a previous client.
+        try owner.setFormat(index: index, direction: direction)
+        guard activeFormatIndex != index else { return }
+        activeFormatIndex = index
+        stream.notifyPropertiesChanged([.streamActiveFormatIndex:
+            CMIOExtensionPropertyState<AnyObject>(value: NSNumber(value: index))])
     }
     func authorizedToStartStream(for client: CMIOExtensionClient) -> Bool { direction == .source || owner.authorizeSink(client) }
     func startStream() throws { try owner.start(direction: direction) }

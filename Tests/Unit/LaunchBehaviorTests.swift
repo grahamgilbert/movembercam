@@ -22,4 +22,14 @@ final class LaunchBehaviorTests: XCTestCase {
             XCTAssertEqual(launch.resumeCamera, wasCapturing)
         }
     }
+
+    func testRelaunchWaitsForExitAndPassesPathsAsArguments() {
+        let path = "/Applications/Name with 'quotes' and $(text).app"
+        let arguments = LaunchBehavior.relaunchArguments(processID: 123, applicationPath: path, wasCapturing: false)
+        XCTAssertEqual(Array(arguments.suffix(3)), ["123", path, "--show-settings"])
+        XCTAssertFalse(arguments[1].contains(path))
+        XCTAssertTrue(arguments[1].contains("kill -0"))
+        XCTAssertFalse(arguments.contains("--resume-camera"))
+    }
+
 }

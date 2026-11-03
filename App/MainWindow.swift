@@ -19,10 +19,15 @@ struct MainWindow: View {
         .background(NativeWindowStyle(minimumContentSize: CGSize(width: 1160, height: 920)))
         .onAppear {
             location.checkLocation()
+            installer.prepareForActivation = model.prepareForExtensionUpdate
+            installer.refreshCamera = model.refreshCameras
+            installer.checkForUpgrade()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshCameras()
+            if installer.state == .awaitingApproval || installer.state == .disabled { installer.refresh() }
         }
+        .onReceive(model.$virtualCameraStatus) { installer.observeCameraStatus($0) }
         .alert("Move MovemberCam to Applications?", isPresented: $location.isOfferingMove) {
             Button("Move to Applications and Restart", action: location.moveAndRestart)
             Button("Quit", role: .cancel) { NSApp.terminate(nil) }
@@ -55,7 +60,7 @@ struct MainWindow: View {
                 }
                 .buttonStyle(.bordered)
                 .fixedSize()
-                .disabled(!model.cameraControls.isEnabled)
+                .disabled(!model.cameraControls.isEnabled || (installer.blocksCapture && model.cameraControls.action == .start))
             }
         }
     }
@@ -108,25 +113,9 @@ struct MainWindow: View {
                     Button("Move to Applications and Restart", action: location.moveAndRestart)
                         .disabled(location.isMoving)
                 }
-                if model.virtualCameraAvailable {
-                    Label("Virtual camera installed and available", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else {
-                    Button(installer.busy ? "Installing…" : "Install Virtual Camera", action: installer.install)
-                        .disabled(installer.busy)
-                    Text(installer.message).font(.caption).foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                    if installer.needsApproval {
-                        Button("Open System Settings", action: installer.openSettings)
-                    }
-                }
-                if installer.needsAppRestart {
-                    Button("Restart MovemberCam") {
-                        restartAfterInstallation()
-                    }
-                    .disabled(model.isBusy || location.isMoving)
-                }
+                extensionControls
             }
+
             Section("Startup") {
                 LoginItemControls(manager: loginItem)
             }
@@ -148,13 +137,16 @@ struct MainWindow: View {
                             .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
-                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .aspectRatio(model.previewFormat.aspectRatio, contentMode: .fit)
                 .accessibilityLabel("Camera preview with fundraising overlay")
 
                 HStack {
-                    Text(model.outputStatus)
+                    Text(installer.busy ? "Updating virtual camera…" :
+                        installer.state == .unavailable ? "Restart MovemberCam to reconnect" : model.outputStatus)
                     Spacer()
-                    Text("1280 × 720 · Up to 30 fps").foregroundStyle(.secondary)
+                    Text(model.isRunning
+                         ? "Auto · \(model.previewFormat.width) × \(model.previewFormat.height) · Up to 30 fps"
+                         : "Auto resolution · Up to 30 fps").foregroundStyle(.secondary)
                 }.font(.caption)
 
                 if let error = model.error {
@@ -167,33 +159,7 @@ struct MainWindow: View {
 
                 GroupBox("Using MovemberCam in Zoom") {
                     VStack(alignment: .leading, spacing: 10) {
-                        if model.virtualCameraAvailable {
-                            Label("Virtual camera installed", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        } else {
-                            Text("First, install the virtual camera so Zoom can use your overlay.")
-                                .font(.callout.weight(.semibold))
-                            if location.isInApplications {
-                                Button(installer.busy ? "Installing…" : "Install Virtual Camera", action: installer.install)
-                                    .buttonStyle(.borderedProminent)
-                                    .disabled(installer.busy)
-                            } else {
-                                Button("Move to Applications and Restart", action: location.moveAndRestart)
-                                    .buttonStyle(.borderedProminent)
-                                    .disabled(location.isMoving)
-                            }
-                            Text(installer.message).font(.callout).foregroundStyle(.secondary)
-                            if installer.needsApproval {
-                                Button("Open System Settings", action: installer.openSettings)
-                            }
-                        }
-                        if installer.needsAppRestart {
-                            Button("Restart MovemberCam", action: restartAfterInstallation)
-                                .disabled(model.isBusy || location.isMoving)
-                        }
-                        Text("After installing or updating the virtual camera, quit Zoom completely and reopen it so MovemberCam appears in its camera list.")
-                            .font(.callout)
-                        Text("Start your camera using the button above. In Zoom, open Settings → Video & effects → Camera and select MovemberCam.")
+                        Text("Start your camera, then choose MovemberCam in Zoom → Settings → Video & effects.")
                             .font(.callout)
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
@@ -209,10 +175,37 @@ struct MainWindow: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private func restartAfterInstallation() {
-        let wasCapturing = model.isRunning
-        model.prepareForRestart {
-            location.restart(resumingCamera: wasCapturing)
+    private var extensionControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if installer.isReady && model.virtualCameraStatus.isUsable {
+                Label("Virtual camera ready", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                HStack(alignment: .top, spacing: 8) {
+                    if installer.busy { ProgressView().controlSize(.small) }
+                    Text(installer.message).font(.callout).textSelection(.enabled)
+                }
+                if let title = installer.recoveryAction.title, location.isInApplications {
+                    Button(title, action: recoverExtension)
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!installer.recoveryEnabled ||
+                            (installer.recoveryAction == .restartApp && (model.isBusy || location.isMoving)))
+                }
+            }
+        }
+    }
+
+    private func recoverExtension() {
+        switch installer.recoveryAction {
+        case .install: installer.install()
+        case .retry: installer.refresh()
+        case .openSettings: installer.openSettings()
+        case .restartApp:
+            model.prepareForRestart {
+                installer.noteAppRestart()
+                location.restart(resumingCamera: false)
+            }
+        case .none: break
         }
     }
 }

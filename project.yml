@@ -45,6 +45,7 @@ targets:
     sources:
       - CameraExtension
       - Shared/VideoFormat.swift
+      - Shared/VideoFrameRenderer.swift
     settings:
       base:
         PRODUCT_NAME: com.grahamgilbert.MovemberCam.CameraExtension

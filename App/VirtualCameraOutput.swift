@@ -11,6 +11,10 @@ final class VirtualCameraOutput {
     private var device: CMIODeviceID = 0
     private var stream: CMIOStreamID = 0
     private var bufferQueue: CMSimpleQueue?
+    private var inputFormat: VideoFormat?
+    private var renderer: VideoFrameRenderer?
+    private var sentQRCode: FrameQRCode?
+    private var didSendQRCode = false
     private var lastProbe: CFAbsoluteTime = 0
     private var deviceListener: CMIOObjectPropertyListenerBlock?
     private var status = VirtualCameraStatus.idle(isInstalled: false) {
@@ -73,6 +77,9 @@ final class VirtualCameraOutput {
     }
 
     private func sendOnWorker(_ sample: CMSampleBuffer) {
+        guard let input = sample.imageBuffer else { return }
+        let incoming = VideoFormat(input)
+        if bufferQueue != nil, incoming != inputFormat { stopOnWorker() }
         let now = CFAbsoluteTimeGetCurrent()
         if now - lastProbe > 1 {
             lastProbe = now
@@ -84,11 +91,31 @@ final class VirtualCameraOutput {
                     UInt32(MemoryLayout.size(ofValue: alive)), &used, &alive)
                 if result != noErr || alive == 0 { stopOnWorker() }
             }
-            if bufferQueue == nil { connect() }
+            if bufferQueue == nil { connect(format: incoming) }
         }
         guard CMClockGetTime(CMClockGetHostTimeClock()).seconds - sample.presentationTimeStamp.seconds < 0.25,
-              let bufferQueue, CMSimpleQueueGetCount(bufferQueue) < CMSimpleQueueGetCapacity(bufferQueue) else { return }
-        let retained = Unmanaged.passRetained(sample)
+              let bufferQueue, let renderer,
+              CMSimpleQueueGetCount(bufferQueue) < CMSimpleQueueGetCapacity(bufferQueue),
+              let output = try? renderer.render(input, at: sample.presentationTimeStamp) else { return }
+        let qrCode = output.imageBuffer.flatMap(FrameQRCode.init)
+        if !didSendQRCode || qrCode != sentQRCode {
+            var property = address(Int(FrameQRCode.controlSelector))
+            // Older 720p extensions need no extra conversion and have no control property.
+            if CMIOObjectHasProperty(stream, &property) {
+                guard let encoded = try? FrameQRCodeUpdate(qrCode: qrCode,
+                    effectiveTime: output.presentationTimeStamp.seconds).encoded() else { return }
+                let value = encoded as CFString
+                var unmanaged = Unmanaged.passUnretained(value)
+                let result = withExtendedLifetime(value) {
+                    CMIOObjectSetPropertyData(stream, &property, 0, nil,
+                        UInt32(MemoryLayout.size(ofValue: unmanaged)), &unmanaged)
+                }
+                guard result == noErr else { status = .cannotOpen(result); return }
+            }
+            sentQRCode = qrCode
+            didSendQRCode = true
+        }
+        let retained = Unmanaged.passRetained(output)
         if CMSimpleQueueEnqueue(bufferQueue, element: retained.toOpaque()) != noErr {
             retained.release()
         }
@@ -109,16 +136,40 @@ final class VirtualCameraOutput {
             }
         }
         bufferQueue = nil
+        inputFormat = nil
+        renderer = nil
+        sentQRCode = nil
+        didSendQRCode = false
         device = 0
         stream = 0
         lastProbe = 0
         status = .idle(isInstalled: !matchingDeviceIDs().isEmpty)
     }
 
-    private func connect() {
+    private func connect(format inputFormat: VideoFormat) {
         for id in matchingDeviceIDs() {
             let streams = objectIDs(id, selector: kCMIODevicePropertyStreams, scope: kCMIODevicePropertyScopeOutput)
             guard let sink = streams.first else { continue }
+            let descriptions = formatDescriptions(sink)
+            let formats = descriptions.map { description -> VideoFormat in
+                let size = CMVideoFormatDescriptionGetDimensions(description)
+                return VideoFormat(width: Int(size.width), height: Int(size.height))
+            }
+            guard let selected = inputFormat.bestMatch(in: formats), let index = formats.firstIndex(of: selected),
+                  let renderer = try? VideoFrameRenderer(format: selected) else {
+                status = .cannotOpen(OSStatus(kCMIOHardwareUnsupportedOperationError))
+                return
+            }
+            // Negotiate before starting the sink, including when capture changes size.
+            // Read the installed extension's list so an older 720p extension still works.
+            var description = Unmanaged.passUnretained(descriptions[index])
+            var property = address(kCMIOStreamPropertyFormatDescription)
+            let formatResult = CMIOObjectSetPropertyData(sink, &property, 0, nil,
+                UInt32(MemoryLayout.size(ofValue: description)), &description)
+            guard formatResult == noErr else {
+                status = .cannotOpen(formatResult)
+                return
+            }
             var unmanagedQueue: Unmanaged<CMSimpleQueue>?
             let queueResult = CMIOStreamCopyBufferQueue(sink, { _, _, _ in }, nil, &unmanagedQueue)
             guard queueResult == noErr, let queue = unmanagedQueue?.takeRetainedValue() else {
@@ -133,10 +184,25 @@ final class VirtualCameraOutput {
             device = id
             stream = sink
             bufferQueue = queue
+            self.inputFormat = inputFormat
+            self.renderer = renderer
             status = .sending
             return
         }
         status = .notInstalled
+    }
+
+    private func formatDescriptions(_ stream: CMIOStreamID) -> [CMFormatDescription] {
+        var property = address(kCMIOStreamPropertyFormatDescriptions)
+        var value: Unmanaged<CFArray>?
+        var used: UInt32 = 0
+        guard CMIOObjectGetPropertyData(stream, &property, 0, nil,
+            UInt32(MemoryLayout.size(ofValue: value)), &used, &value) == noErr,
+            let descriptions = value?.takeRetainedValue() as? [CMFormatDescription] else { return [] }
+        return descriptions.filter {
+            CMFormatDescriptionGetMediaType($0) == kCMMediaType_Video &&
+            CMFormatDescriptionGetMediaSubType($0) == kCVPixelFormatType_32BGRA
+        }
     }
 
     private func matchingDeviceIDs() -> [CMIODeviceID] {

@@ -81,7 +81,7 @@ struct MovemberCamApp: App {
             CommandMenu("Camera") {
                 Button(model.cameraControls.title, action: model.performCameraAction)
                 .keyboardShortcut("k", modifiers: [.command])
-                .disabled(!model.cameraControls.isEnabled)
+                .disabled(!model.cameraControls.isEnabled || (installer.blocksCapture && model.cameraControls.action == .start))
                 Button("Refresh Cameras", action: model.refreshCameras)
                 Toggle("Enable Overlay", isOn: $model.isOverlayEnabled)
                     .keyboardShortcut("o", modifiers: [.command, .shift])
@@ -91,7 +91,7 @@ struct MovemberCamApp: App {
             }
         }
         MenuBarExtra {
-            MenuBarControls(model: model, updater: updater)
+            MenuBarControls(installer: installer, model: model, updater: updater)
         } label: {
             MenuBarIcon(delegate: delegate)
         }
@@ -119,6 +119,7 @@ struct MenuBarIcon: View {
 }
 
 struct MenuBarControls: View {
+    @ObservedObject var installer: ExtensionInstaller
     @ObservedObject var model: AppModel
     @ObservedObject var updater: AppUpdater
     @Environment(\.openWindow) private var openWindow
@@ -127,7 +128,7 @@ struct MenuBarControls: View {
         Text(model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Camera off")
         Toggle("Enable overlay", isOn: $model.isOverlayEnabled)
         Button(model.cameraControls.title, action: model.performCameraAction)
-            .disabled(!model.cameraControls.isEnabled)
+            .disabled(!model.cameraControls.isEnabled || (installer.blocksCapture && model.cameraControls.action == .start))
         Divider()
         Button("Open settings…") {
             openWindow(id: "main")
