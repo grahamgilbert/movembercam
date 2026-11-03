@@ -9,6 +9,9 @@ struct MainWindow: View {
     @ObservedObject var updater: AppUpdater
     @ObservedObject var attention: CameraAttentionController
 
+    enum SettingsTab { case camera, overlay, app }
+    @State var selectedTab = SettingsTab.camera
+
     var body: some View {
         VStack(spacing: 0) {
             if let issue = attention.issue {
@@ -30,15 +33,18 @@ struct MainWindow: View {
                 }.padding(16).background(Color.orange.opacity(0.1))
                 Divider()
             }
-            HSplitView {
-                settings
-                    .frame(minWidth: 400, idealWidth: 460, maxWidth: 520)
-                preview
-                    .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
+            TabView(selection: $selectedTab) {
+                cameraTab
+                    .tabItem { Label("Camera", systemImage: "video") }.tag(SettingsTab.camera)
+                overlayTab
+                    .tabItem { Label("Overlay", systemImage: "qrcode") }.tag(SettingsTab.overlay)
+                appTab
+                    .tabItem { Label("App", systemImage: "gearshape") }.tag(SettingsTab.app)
             }
+            .padding(12)
         }
-        .frame(minWidth: 1160, minHeight: 920)
-        .background(NativeWindowStyle(minimumContentSize: CGSize(width: 1160, height: 920)))
+        .frame(minWidth: 760, minHeight: 420)
+        .background(NativeWindowStyle(minimumContentSize: CGSize(width: 860, height: 560)))
         .onAppear { location.checkLocation() }
         .alert("Move MovemberCam to Applications?", isPresented: $location.isOfferingMove) {
             Button("Move to Applications and Restart", action: location.moveAndRestart)
@@ -79,51 +85,69 @@ struct MainWindow: View {
         }
     }
 
-    private var settings: some View {
-        Form {
-            Section("Camera") {
-                Picker("Source", selection: Binding(get: { model.selectedCameraID }, set: model.selectCamera)) {
+    private var cameraTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Picker("Camera", selection: Binding(get: { model.selectedCameraID }, set: model.selectCamera)) {
                     if model.cameras.isEmpty { Text("No cameras found").tag("") }
                     ForEach(model.cameras) { Text($0.name).tag($0.id) }
                 }
+                .frame(maxWidth: 460)
                 .disabled(model.isBusy)
-                Button("Refresh Cameras", action: model.retryCamera)
-                Text("Your camera runs while this preview is open or a video app uses MovemberCam.")
-                    .font(.caption).foregroundStyle(.secondary)
+                Button("Refresh Cameras", action: model.retryCamera).disabled(model.isBusy)
+                Spacer(minLength: 0)
             }
+            Text("Your camera runs while Settings is open or a video app uses MovemberCam.")
+                .font(.caption).foregroundStyle(.secondary)
+            preview
+            Text("In Zoom, choose MovemberCam in Settings → Video & effects.")
+                .font(.callout).foregroundStyle(.secondary)
+        }.padding(16)
+    }
 
-            Section {
-                TextField("QR destination", text: $model.draft.qrURL,
-                          prompt: Text("https://movember.com/t/musta-ch"))
-                    .accessibilityLabel("QR code destination")
-                TextField("Written URL", text: $model.draft.displayURL,
-                          prompt: Text("https://movember.com/t/musta-ch"))
-                    .accessibilityLabel("Written URL")
-            } header: {
-                Text("Fundraising Links")
-            } footer: {
-                Text("The QR destination opens when scanned. The written URL is displayed below it.")
-            }
-
-            Section("Overlay") {
-                Picker("QR position", selection: $model.draft.corner) {
-                    ForEach(OverlayConfiguration.Corner.allCases, id: \.self) { Text($0.title).tag($0) }
+    private var overlayTab: some View {
+        HSplitView {
+            Form {
+                Section {
+                    TextField("QR destination", text: $model.draft.qrURL,
+                              prompt: Text("https://movember.com/t/musta-ch"))
+                        .accessibilityLabel("QR code destination")
+                    TextField("Written URL", text: $model.draft.displayURL,
+                              prompt: Text("https://movember.com/t/musta-ch"))
+                        .accessibilityLabel("Written URL")
+                } header: {
+                    Text("Fundraising Links")
+                } footer: {
+                    Text("The QR destination opens when scanned. The written URL appears below it.")
                 }
-                Toggle("Mirror camera image", isOn: $model.draft.mirrorCamera)
-                Text("The logo, QR code and URL stay readable when mirroring.")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack {
-                    Spacer()
+                Section("Appearance") {
+                    Picker("QR position", selection: $model.draft.corner) {
+                        ForEach(OverlayConfiguration.Corner.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    Toggle("Mirror camera image", isOn: $model.draft.mirrorCamera)
+                    Text("The logo, QR code and URL stay readable when mirroring.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section {
                     Button(model.isApplying ? "Applying…" : "Apply Changes", action: model.apply)
                         .disabled(!model.hasChanges || model.validationMessage != nil || model.isApplying)
-                }
-                if let validation = model.validationMessage {
-                    Text(validation).font(.caption).foregroundStyle(.red)
-                } else if model.hasChanges {
-                    Text("Changes have not been applied.").font(.caption).foregroundStyle(.secondary)
+                    if let validation = model.validationMessage {
+                        Text(validation).font(.caption).foregroundStyle(.red)
+                    } else if model.hasChanges {
+                        Text("Changes have not been applied.").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
+            .formStyle(.grouped)
+            .frame(minWidth: 300, idealWidth: 340, maxWidth: 420)
+            preview
+                .padding(16)
+                .frame(minWidth: 360, maxWidth: .infinity)
+        }
+    }
 
+    private var appTab: some View {
+        Form {
             Section("Virtual Camera") {
                 if !location.isInApplications {
                     Button("Move to Applications and Restart", action: location.moveAndRestart)
@@ -131,18 +155,24 @@ struct MainWindow: View {
                 }
                 extensionControls
             }
-
-            Section("Startup") {
-                LoginItemControls(manager: loginItem)
+            Section("Startup") { LoginItemControls(manager: loginItem) }
+            Section("Updates") { UpdateControls(updater: updater) }
+            Section {
+                Text("Closing this window keeps MovemberCam running in the menu bar.")
+                    .foregroundStyle(.secondary)
+                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
     }
 
     private var preview: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Camera Preview").font(.headline)
+        VStack(alignment: .leading, spacing: 10) {
+            GeometryReader { geometry in
+                let width = min(geometry.size.width, geometry.size.height * model.previewFormat.aspectRatio)
                 ZStack {
                     Color.black
                     VideoPreviewSurface(feed: model.previewFeed)
@@ -153,41 +183,24 @@ struct MainWindow: View {
                             .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
-                .aspectRatio(model.previewFormat.aspectRatio, contentMode: .fit)
+                .frame(width: width, height: width / model.previewFormat.aspectRatio)
+                .frame(width: geometry.size.width, height: geometry.size.height)
                 .accessibilityLabel("Camera preview with fundraising overlay")
-
-                HStack {
-                    Text(installer.state.connectionSummary ?? model.outputStatus)
-                    Spacer()
-                    Text(model.isRunning
-                         ? "Auto · \(model.previewFormat.width) × \(model.previewFormat.height) · Up to 30 fps"
-                         : "Auto resolution · Up to 30 fps").foregroundStyle(.secondary)
-                }.font(.caption)
-
-                if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.red).font(.callout)
-                    if model.cameraDenied {
-                        Button("Open Camera Settings", action: model.openCameraSettings)
-                    }
-                }
-
-                GroupBox("Using MovemberCam in Zoom") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Choose MovemberCam in Zoom → Settings → Video & effects. Your camera starts automatically while Zoom uses it.")
-                            .font(.callout)
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
-                }
-                GroupBox("Updates") {
-                    UpdateControls(updater: updater)
-                }
-                Text("Closing this window keeps MovemberCam running in the menu bar.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text("Version \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
-                    .font(.caption).foregroundStyle(.secondary)
-            }.padding(24)
+            }
+            .frame(minHeight: 180)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(installer.state.connectionSummary ?? model.outputStatus)
+                Text(model.isRunning
+                     ? "Auto · \(model.previewFormat.width) × \(model.previewFormat.height) · Up to 30 fps"
+                     : "Auto resolution · Up to 30 fps").foregroundStyle(.secondary)
+            }.font(.caption)
+            if let error = model.error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red).font(.callout)
+                if model.cameraDenied { Button("Open Camera Settings", action: model.openCameraSettings) }
+            }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var extensionControls: some View {
