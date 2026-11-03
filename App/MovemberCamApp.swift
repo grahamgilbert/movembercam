@@ -6,13 +6,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var shutdown: ((@escaping () -> Void) -> Void)?
     var openSettings: (() -> Void)?
     private weak var model: AppModel?
+    private weak var attention: CameraAttentionController?
     private var finishedLaunching = false
     private var windowObservers: [NSObjectProtocol] = []
 
     @MainActor
-    func settingsDidAppear(model: AppModel) {
+    func settingsDidAppear(model: AppModel, installer: ExtensionInstaller,
+                           attention: CameraAttentionController, location: AppLocationManager) {
         self.model = model
-        shutdown = { completion in model.shutdown(completion: completion) }
+        self.attention = attention
+        attention.onShowSettings = { [weak self] in self?.showSettingsWindow() }
+        attention.bind(model: model, installer: installer) {
+            model.prepareForRestart {
+                installer.noteAppRestart()
+                location.restart()
+            }
+        }
+        shutdown = { completion in
+            attention.prepareForTermination()
+            model.shutdown(completion: completion)
+        }
         if windowObservers.isEmpty {
             for name in [NSWindow.didBecomeKeyNotification, NSWindow.didChangeOcclusionStateNotification,
                          NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification,
@@ -51,8 +64,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: NSWindow? {
         NSApp.windows.first { $0.title == "MovemberCam" }
     }
-    private func showSettingsWindow() {
-        if let settingsWindow { settingsWindow.makeKeyAndOrderFront(nil) }
+    func showSettingsWindow() {
+        NSApp.unhide(nil)
+        if let settingsWindow {
+            settingsWindow.deminiaturize(nil)
+            settingsWindow.makeKeyAndOrderFront(nil)
+        }
         else { openSettings?() }
         NSApp.activate(ignoringOtherApps: true)
         updatePreviewVisibility()
@@ -61,7 +78,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Wait until login launch has hidden Settings before considering preview demand.
         guard finishedLaunching else { return }
         let window = settingsWindow
-        model?.setPreviewVisible(!closing && window?.isVisible == true && window?.isMiniaturized == false && !NSApp.isHidden)
+        let visible = !closing && window?.isVisible == true && window?.isMiniaturized == false && !NSApp.isHidden
+        model?.setPreviewVisible(visible)
+        attention?.setSettingsVisible(visible)
     }
     func applicationDidHide(_ notification: Notification) { updatePreviewVisibility() }
     func applicationDidUnhide(_ notification: Notification) { updatePreviewVisibility() }
@@ -81,6 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct MovemberCamApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = AppModel()
+    @StateObject private var attention = CameraAttentionController()
     @StateObject private var installer = ExtensionInstaller()
     @StateObject private var loginItem = LoginItemManager()
     @StateObject private var location = AppLocationManager()
@@ -88,8 +108,8 @@ struct MovemberCamApp: App {
 
     var body: some Scene {
         Window("MovemberCam", id: "main") {
-            MainWindow(model: model, installer: installer, loginItem: loginItem, location: location, updater: updater)
-                .onAppear { delegate.settingsDidAppear(model: model) }
+            MainWindow(model: model, installer: installer, loginItem: loginItem, location: location, updater: updater, attention: attention)
+                .onAppear { delegate.settingsDidAppear(model: model, installer: installer, attention: attention, location: location) }
         }
         .defaultSize(width: 1280, height: 980)
         .windowStyle(.titleBar)
@@ -114,23 +134,32 @@ struct MovemberCamApp: App {
             }
         }
         MenuBarExtra {
-            MenuBarControls(installer: installer, model: model, updater: updater)
+            MenuBarControls(installer: installer, model: model, updater: updater, attention: attention)
         } label: {
-            MenuBarIcon(delegate: delegate)
+            MenuBarIcon(delegate: delegate, model: model, installer: installer, attention: attention, location: location)
         }
     }
 }
 
 struct MenuBarIcon: View {
     let delegate: AppDelegate
+    let model: AppModel
+    let installer: ExtensionInstaller
+    @ObservedObject var attention: CameraAttentionController
+    let location: AppLocationManager
     @Environment(\.openWindow) private var openWindow
     @State private var handledRelaunch = false
 
     var body: some View {
-        Image(systemName: "mustache.fill")
-            .accessibilityLabel("MovemberCam")
+        HStack(spacing: 3) {
+            Image(systemName: "mustache.fill")
+            if attention.issue != nil { Image(systemName: "exclamationmark.triangle.fill") }
+        }
+            .accessibilityLabel(attention.issue.map { "MovemberCam: " + $0.title } ?? "MovemberCam")
+            .help(attention.issue?.title ?? "MovemberCam")
             .onAppear {
                 delegate.openSettings = { openWindow(id: "main") }
+                delegate.settingsDidAppear(model: model, installer: installer, attention: attention, location: location)
                 guard !handledRelaunch else { return }
                 handledRelaunch = true
                 if CommandLine.arguments.contains("--show-settings") {
@@ -145,20 +174,24 @@ struct MenuBarControls: View {
     @ObservedObject var installer: ExtensionInstaller
     @ObservedObject var model: AppModel
     @ObservedObject var updater: AppUpdater
-    @Environment(\.openWindow) private var openWindow
+    @ObservedObject var attention: CameraAttentionController
 
     var body: some View {
-        Text(model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Waiting for a video app")
+        if let issue = attention.issue {
+            Label(issue.title, systemImage: "exclamationmark.triangle.fill")
+            Text(issue.message)
+            Button(issue.recovery.title, action: attention.recover).disabled(!attention.canRecover)
+            Divider()
+        } else {
+            Text(installer.state.connectionSummary ?? (model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Waiting for a video app"))
+        }
         Toggle("Enable overlay", isOn: $model.isOverlayEnabled)
         if model.cameraControls.action != nil {
             Button(model.cameraControls.title, action: model.performCameraAction)
                 .disabled(!model.cameraControls.isEnabled)
         }
         Divider()
-        Button("Open settings…") {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        Button("Open settings…", action: attention.showSettings)
         Button("Check for Updates…", action: updater.checkForUpdates)
             .disabled(!updater.canCheckForUpdates)
         Divider()
