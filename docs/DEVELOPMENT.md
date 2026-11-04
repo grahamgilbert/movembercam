@@ -106,6 +106,8 @@ The extension exposes a read-only `mdem` source-stream property indicating wheth
 
 Older extensions without `mdem` report that an update is needed and cannot request capture for video apps; the Settings preview remains available. Build 9 lets the existing extension upgrade flow replace earlier builds. Extension replacement suspends capture until installation leaves its blocking state; current demand then controls whether it resumes. The obsolete `--resume-camera` launch flag no longer opens hardware.
 
+A runtime capture failure stops the session and, while a preview or video consumer still needs it, refreshes cameras after one second. Automatic recovery is limited to one attempt per source and consumer session, including when the retry starts successfully but fails again later. A manual retry, source change, or new consumer session renews that attempt. Delayed recovery checks the capture generation, current demand, suspension, and shutdown before opening hardware. Startup failures do not schedule this delayed retry. A failed preview displays **Camera stopped** instead of suggesting that a video app is required.
+
 Switching cameras during capture stops the old source and resumes with the new one. The extension sends an empty dark frame at the negotiated output resolution when capture stops or no fresh frame arrives for half a second. Audio stays with the microphone selected in the meeting app.
 
 Overlay settings are stored locally in macOS preferences. **Apply Changes** saves the URLs, QR position, and mirroring; unapplied edits are discarded when the app quits. Camera selection and the menu bar overlay toggle save immediately. Opening Settings brings the existing window forward.

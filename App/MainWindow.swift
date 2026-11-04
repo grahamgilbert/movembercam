@@ -188,7 +188,7 @@ struct MainWindow: View {
                     Color.black
                     VideoPreviewSurface(feed: model.previewFeed)
                     if !model.isRunning {
-                        Label(model.isBusy ? "Updating camera…" : "Waiting for a video app", systemImage: "video.slash")
+                        Label(model.previewStatus, systemImage: "video.slash")
                             .foregroundStyle(.white.opacity(0.8))
                             .padding(10)
                             .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 6))

@@ -35,18 +35,24 @@ final class AppModel: ObservableObject {
     private var isShuttingDown = false
     private var isStopping = false
     private var stopCompletions: [() -> Void] = []
+    private var hasRetriedCapture = false
     private let defaults: UserDefaults
     private let cameraAuthorization: () -> AVAuthorizationStatus
     private let requestCameraAccess: () async -> Bool
+    private let scheduleCameraRetry: (@escaping @MainActor @Sendable () -> Void) -> Void
 
     init(defaults: UserDefaults = .standard,
          restoringAfterRecovery: Bool = CommandLine.arguments.contains("--camera-recovery"),
          cameraAuthorization: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
-         requestCameraAccess: @escaping () async -> Bool = { await AVCaptureDevice.requestAccess(for: .video) }) {
+         requestCameraAccess: @escaping () async -> Bool = { await AVCaptureDevice.requestAccess(for: .video) },
+         scheduleCameraRetry: @escaping (@escaping @MainActor @Sendable () -> Void) -> Void = { retry in
+             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { retry() }
+         }) {
         self.defaults = defaults
         preferredCameraID = defaults.string(forKey: "MovemberCam.cameraID") ?? ""
         self.cameraAuthorization = cameraAuthorization
         self.requestCameraAccess = requestCameraAccess
+        self.scheduleCameraRetry = scheduleCameraRetry
         let stored = OverlayPreferences.load(from: defaults)
         draft = OverlayPreferences.takeRecoveryDraft(from: defaults, restoring: restoringAfterRecovery) ?? stored
         applied = stored
@@ -67,17 +73,16 @@ final class AppModel: ObservableObject {
             engine.onDemand = { [weak self] needed in
                 Task { @MainActor in
                     guard let self else { return }
+                    if needed && !self.demand.isRequested && !self.demand.isPreviewVisible {
+                        self.hasRetriedCapture = false
+                    }
                     self.demand.update(needed)
                     self.reconcileCapture()
                 }
             }
             engine.onFailure = { [weak self] message in
                 Task { @MainActor in
-                    guard let self, !self.demand.isSuspended, !self.isShuttingDown else { return }
-                    self.error = message
-                    self.cameraFailure = message
-                    self.demand.hasFailed = true
-                    self.stop()
+                    self?.captureFailed(message)
                 }
             }
             engine.showPlaceholder()
@@ -132,8 +137,38 @@ final class AppModel: ObservableObject {
     func reconnectVirtualCamera() { engine?.reconnectVirtualCamera() }
 
     func retryCamera() {
+        hasRetriedCapture = false
         demand.hasFailed = false
         refreshCameras()
+    }
+
+    private func captureFailed(_ message: String) {
+        guard !demand.isSuspended, !isShuttingDown, !isStopping, isRunning || isBusy else { return }
+        error = message
+        cameraFailure = message
+        demand.hasFailed = true
+        let shouldRetry = !hasRetriedCapture && (demand.isRequested || demand.isPreviewVisible)
+        if shouldRetry { hasRetriedCapture = true }
+        stop { [weak self] in
+            guard let self, shouldRetry else { return }
+            let token = self.generation
+            self.scheduleCameraRetry { [weak self] in
+                guard let self, self.generation == token, !self.isShuttingDown,
+                      !self.demand.isSuspended, self.demand.hasFailed,
+                      self.demand.isRequested || self.demand.isPreviewVisible else { return }
+                // Refresh only after capture has stopped and devices have had time to settle.
+                self.demand.hasFailed = false
+                self.refreshCameras()
+            }
+        }
+    }
+
+    var previewStatus: String {
+        if isBusy { return "Updating camera…" }
+        if cameraDenied { return "Camera access required" }
+        if cameraFailure != nil { return "Camera stopped" }
+        if selectedCameraID.isEmpty { return "No camera connected" }
+        return "Camera paused"
     }
 
     func refreshCameras() {
@@ -155,6 +190,7 @@ final class AppModel: ObservableObject {
             let wasCapturing = isRunning || isBusy
             let disconnected = !cameras.contains(where: { $0.id == selectedCameraID })
             selectedCameraID = availableID
+            hasRetriedCapture = false
             demand.hasFailed = false
             if wasCapturing {
                 stop()
@@ -193,6 +229,7 @@ final class AppModel: ObservableObject {
         defaults.set(cameraID, forKey: "MovemberCam.cameraID")
         guard cameraID != selectedCameraID else { return }
         selectedCameraID = cameraID
+        hasRetriedCapture = false
         demand.hasFailed = false
         if isRunning { stop() } else { reconcileCapture() }
     }
@@ -203,6 +240,9 @@ final class AppModel: ObservableObject {
     }
 
     func setPreviewVisible(_ visible: Bool) {
+        if visible && !demand.isPreviewVisible && !demand.isRequested {
+            hasRetriedCapture = false
+        }
         demand.showPreview(visible)
         reconcileCapture()
     }
