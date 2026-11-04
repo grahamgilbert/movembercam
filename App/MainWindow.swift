@@ -8,6 +8,7 @@ struct MainWindow: View {
     @ObservedObject var location: AppLocationManager
     @ObservedObject var updater: AppUpdater
     @ObservedObject var attention: CameraAttentionController
+    var onPreviewTabChanged: (Bool) -> Void
 
     enum SettingsTab: String { case camera, overlay, app }
     @AppStorage("MovemberCam.settingsTab") var selectedTab = SettingsTab.camera
@@ -50,7 +51,12 @@ struct MainWindow: View {
         }
         .frame(minWidth: 760, minHeight: 420)
         .background(NativeWindowStyle(minimumContentSize: CGSize(width: 860, height: 560)))
-        .onAppear { location.checkLocation() }
+        .onAppear {
+            location.checkLocation()
+            onPreviewTabChanged(selectedTab != .app)
+        }
+        .onChange(of: selectedTab) { _, tab in onPreviewTabChanged(tab != .app) }
+        .onDisappear { onPreviewTabChanged(false) }
         .alert("Move MovemberCam to Applications?", isPresented: $location.isOfferingMove) {
             Button("Move to Applications and Restart", action: location.moveAndRestart)
             Button("Quit", role: .cancel) { NSApp.terminate(nil) }
@@ -102,7 +108,7 @@ struct MainWindow: View {
                 Button("Refresh Cameras", action: model.retryCamera).disabled(model.isBusy)
                 Spacer(minLength: 0)
             }
-            Text("Your camera runs while Settings is open or a video app uses MovemberCam.")
+            Text("Your camera runs while this preview is visible or a video app uses MovemberCam.")
                 .font(.caption).foregroundStyle(.secondary)
             preview
             Text("In Zoom, choose MovemberCam in Settings → Video & effects.")

@@ -12,10 +12,6 @@ final class CameraDiscovery: NSObject {
     @objc dynamic var devices: [AVCaptureDevice] = []
 }
 
-@MainActor final class VideoPreviewFeed {
-    var sample: CMSampleBuffer?
-}
-
 final class CameraEngine {
     static let discoverySession = CameraDiscovery()
     static var choices = [CameraChoice(id: "one", name: "One"), CameraChoice(id: "two", name: "Two")]
