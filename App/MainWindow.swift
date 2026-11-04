@@ -27,8 +27,13 @@ struct MainWindow: View {
                     }
                     Spacer()
                     if issue.recovery != .showSettings {
-                        Button(issue.recovery.title, action: attention.recover)
-                            .disabled(!attention.canRecover)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Button(issue.recovery.title, action: attention.recover)
+                                .disabled(!attention.canRecover)
+                            if issue.recovery == .restartZoom {
+                                Button("Camera is already listed", action: attention.acknowledgeZoomCamera)
+                            }
+                        }
                     }
                 }.padding(16).background(Color.orange.opacity(0.1))
                 Divider()
@@ -205,7 +210,10 @@ struct MainWindow: View {
 
     private var extensionControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if installer.isReady && model.virtualCameraStatus.isUsable {
+            if attention.issue?.kind == .videoAppRestart {
+                Label("Restart Zoom to finish camera setup", systemImage: "arrow.clockwise")
+                    .foregroundStyle(.orange)
+            } else if installer.isReady && model.virtualCameraStatus.isUsable {
                 Label("Virtual camera ready", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             } else {

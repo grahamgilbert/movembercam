@@ -3,6 +3,7 @@ import SystemExtensions
 
 @MainActor final class FakeCameraNotifications: CameraIssueNotifying {
     var onOpenSettings: (() -> Void)?
+    var onRecover: ((CameraAttentionIssue.Kind) -> Void)?
     var shouldPresent: ((CameraAttentionIssue.Kind) -> Bool)?
     var authorized = true
     var holdAuthorization = false
@@ -52,7 +53,8 @@ import SystemExtensions
             }
             model = AppModel(defaults: defaults, cameraAuthorization: { .authorized })
             engine = CameraEngine.latest!
-            attention = CameraAttentionController(notifications: notifications, defaults: defaults)
+            attention = CameraAttentionController(notifications: notifications, defaults: defaults,
+                zoom: ZoomRestartTracker(defaults: defaults, running: { nil }, providerStarted: { nil }))
         }
         func bind() {
             installer.probeFreshCamera = { $0(.missing) }
@@ -173,6 +175,91 @@ import SystemExtensions
         await settle(); failure.model.refreshCameras(); await settle()
         try check(failure.notifications.authorizationCalls == 1 && failure.attention.issue != nil,
                   "Notification delivery failure leaves recovery visible without retrying endlessly")
+
+        try await checkZoomRestart()
+    }
+
+    static func checkZoomRestart() async throws {
+        let suite = "MovemberCam.zoom-attention-checks.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var process: VideoAppProcess? = VideoAppProcess(pid: 500, launchedAt: Date(timeIntervalSince1970: 100))
+        var restarts = 0
+        let tracker = ZoomRestartTracker(defaults: defaults, running: { process },
+            providerStarted: { Date(timeIntervalSince1970: 200) }, now: { Date(timeIntervalSince1970: 200) }, restart: {
+                restarts += 1
+                process = VideoAppProcess(pid: 501, launchedAt: Date(timeIntervalSince1970: 300))
+            })
+        let model = AppModel(defaults: defaults, cameraAuthorization: { .authorized })
+        let notifications = FakeCameraNotifications()
+        let attention = CameraAttentionController(notifications: notifications, defaults: defaults, zoom: tracker)
+        let installer = ExtensionInstaller(bundledVersion: CameraExtensionVersion(release: "1.0.9", build: "21"),
+            canInstall: false, submit: { _ in }, schedule: { _ in }, recoveryDefaults: defaults)
+        defer { attention.prepareForTermination(); model.shutdown {} }
+        attention.bind(model: model, installer: installer, restartApp: {})
+        installer.inspect([InstalledCameraExtension(version: CameraExtensionVersion(release: "1.0.9", build: "21"),
+            isEnabled: true, isAwaitingApproval: false, isUninstalling: false)])
+        installer.observeCameraStatus(.idle(isInstalled: true))
+        CameraEngine.latest.onOutputStatus?(.idle(isInstalled: true))
+        await settle(); await settle()
+        try check(attention.issue?.kind == .videoAppRestart && attention.issue?.recovery == .restartZoom,
+                  "A healthy camera with an older Zoom process keeps a visible actionable warning with Settings closed")
+        try check(notifications.delivered.map(\.kind) == [.videoAppRestart],
+                  "Zoom restart need sends a Notification Center alert even though the camera backend is ready")
+        let content = CameraIssueNotifications.content(for: attention.issue!)
+        try check(content.title == "Restart Zoom for MovemberCam" && content.body.count <= 60,
+                  "Zoom restart notification uses short actionable copy")
+        model.refreshCameras(); await settle()
+        try check(notifications.delivered.count == 1, "Repeated healthy-camera updates do not spam Zoom restart alerts")
+        let restored = ZoomRestartTracker(defaults: defaults, running: { process }, providerStarted: { nil })
+        try check(restored.state.pending == process, "Pending Zoom restart survives a MovemberCam relaunch")
+        notifications.onRecover?(.videoAppRestart)
+        await settle(); await settle()
+        try check(restarts == 1 && attention.issue == nil && notifications.clears > 0,
+                  "The explicit notification action restarts Zoom and the new process clears the warning")
+        notifications.onRecover?(.videoAppRestart)
+        await settle()
+        try check(restarts == 1, "A stale notification cannot restart an already refreshed Zoom process")
+
+        let failedDefaults = UserDefaults(suiteName: suite + ".failed")!
+        defer { failedDefaults.removePersistentDomain(forName: suite + ".failed") }
+        var oldProcess: VideoAppProcess? = VideoAppProcess(pid: 510, launchedAt: Date(timeIntervalSince1970: 100))
+        let failed = ZoomRestartTracker(defaults: failedDefaults, running: { oldProcess },
+            providerStarted: { Date(timeIntervalSince1970: 200) }, restart: { throw CocoaError(.userCancelled) })
+        failed.refresh(cameraReady: true)
+        await settle(); await settle()
+        failed.restartZoomForUser()
+        await settle()
+        try check(failed.issue != nil && failed.error != nil && !failed.isRestarting,
+                  "A refused Zoom quit ends progress and keeps the restart warning actionable")
+        oldProcess = VideoAppProcess(pid: 511, launchedAt: Date(timeIntervalSince1970: 300))
+        failed.refresh(cameraReady: true)
+        try check(failed.issue == nil, "Manually reopening Zoom clears a failed restart warning")
+
+        let raceDefaults = UserDefaults(suiteName: suite + ".race")!
+        defer { raceDefaults.removePersistentDomain(forName: suite + ".race") }
+        var raceProcess: VideoAppProcess? = VideoAppProcess(pid: 520, launchedAt: Date(timeIntervalSince1970: 100))
+        var raceRestarts = 0
+        let racing = ZoomRestartTracker(defaults: raceDefaults, running: { raceProcess },
+            providerStarted: { Date(timeIntervalSince1970: 200) }, restart: { raceRestarts += 1 })
+        racing.refresh(cameraReady: true)
+        await settle(); await settle()
+        raceProcess = VideoAppProcess(pid: 521, launchedAt: Date(timeIntervalSince1970: 300))
+        racing.restartZoomForUser()
+        await settle()
+        try check(raceRestarts == 0, "Restart action rechecks process identity before touching an already reopened Zoom")
+
+        let metadataDefaults = UserDefaults(suiteName: suite + ".metadata")!
+        defer { metadataDefaults.removePersistentDomain(forName: suite + ".metadata") }
+        let releaseMetadata = DispatchSemaphore(value: 0)
+        let metadata = ZoomRestartTracker(defaults: metadataDefaults, running: { process },
+            providerStarted: { releaseMetadata.wait(); return Date(timeIntervalSince1970: 200) })
+        metadata.refresh(cameraReady: true)
+        metadata.cameraWillChange()
+        releaseMetadata.signal()
+        await settle(); await settle()
+        try check(metadata.state.awaitingCamera && metadata.state.pending == nil,
+                  "An old provider lookup cannot complete a newer camera registration")
     }
     static func main() async {
         do { try await run(); print("\(checks) camera attention checks passed") }

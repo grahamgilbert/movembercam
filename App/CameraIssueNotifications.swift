@@ -5,6 +5,7 @@ import os
 @MainActor
 protocol CameraIssueNotifying: AnyObject {
     var onOpenSettings: (() -> Void)? { get set }
+    var onRecover: ((CameraAttentionIssue.Kind) -> Void)? { get set }
     var shouldPresent: ((CameraAttentionIssue.Kind) -> Bool)? { get set }
     func authorize() async -> Bool
     func deliver(_ issue: CameraAttentionIssue) async throws
@@ -16,9 +17,12 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
     private static let identifier = "MovemberCam.cameraAttention"
     private static let category = "MovemberCam.cameraRecovery"
     private static let openAction = "MovemberCam.openCameraSettings"
+    private static let zoomCategory = "MovemberCam.zoomRecovery"
+    private static let restartZoomAction = "MovemberCam.restartZoom"
     private static let logger = Logger(subsystem: "com.grahamgilbert.MovemberCam", category: "Notifications")
     private let center: UNUserNotificationCenter
     var onOpenSettings: (() -> Void)?
+    var onRecover: ((CameraAttentionIssue.Kind) -> Void)?
     var shouldPresent: ((CameraAttentionIssue.Kind) -> Bool)?
 
     init(center: UNUserNotificationCenter = .current()) {
@@ -26,8 +30,10 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
         super.init()
         center.delegate = self
         let action = UNNotificationAction(identifier: Self.openAction, title: "Open MovemberCam", options: [.foreground])
+        let restartZoom = UNNotificationAction(identifier: Self.restartZoomAction, title: "Restart Zoom", options: [.foreground])
         center.setNotificationCategories([UNNotificationCategory(identifier: Self.category,
-            actions: [action], intentIdentifiers: [], options: [])])
+            actions: [action], intentIdentifiers: [], options: []),
+            UNNotificationCategory(identifier: Self.zoomCategory, actions: [restartZoom, action], intentIdentifiers: [], options: [])])
     }
 
     func authorize() async -> Bool {
@@ -46,7 +52,7 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
         let content = UNMutableNotificationContent()
         content.title = issue.notificationCopy.title
         content.body = issue.notificationCopy.body
-        content.categoryIdentifier = Self.category
+        content.categoryIdentifier = issue.kind == .videoAppRestart ? Self.zoomCategory : Self.category
         content.userInfo = ["cameraIssue": issue.kind.rawValue]
         return content
     }
@@ -72,7 +78,12 @@ final class CameraIssueNotifications: NSObject, CameraIssueNotifying, UNUserNoti
         let identifier = response.notification.request.identifier
         let action = response.actionIdentifier
         Task { @MainActor [weak self] in
-            guard identifier == Self.identifier,
+            guard identifier == Self.identifier else { return }
+            if action == Self.restartZoomAction {
+                self?.onRecover?(.videoAppRestart)
+                return
+            }
+            guard
                   action == UNNotificationDefaultActionIdentifier || action == Self.openAction else { return }
             Self.logger.notice("Notification opened action=\(action, privacy: .public)")
             self?.onOpenSettings?()

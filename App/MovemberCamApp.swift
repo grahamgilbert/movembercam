@@ -203,6 +203,9 @@ struct MenuBarControls: View {
         if attention.issue == nil {
             Text(installer.state.connectionSummary ?? (model.isRunning ? "MovemberCam · Camera live" : "MovemberCam · Waiting for a video app"))
         }
+        if attention.issue?.recovery == .restartZoom {
+            Button("Restart Zoom", action: attention.recover).disabled(!attention.canRecover)
+        }
         Toggle("Enable overlay", isOn: $model.isOverlayEnabled)
         if model.cameraControls.action != nil {
             Button(model.cameraControls.title, action: model.performCameraAction)

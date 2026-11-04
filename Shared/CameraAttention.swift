@@ -3,11 +3,11 @@ import Foundation
 struct CameraAttentionIssue: Equatable {
     enum Kind: String, Hashable {
         case extensionPermission, missingExtension, extensionFailure, restartRequired
-        case cameraPermission, missingCamera, captureFailure
+        case cameraPermission, missingCamera, captureFailure, videoAppRestart
     }
     enum Recovery: Equatable {
         case extensionSettings, installExtension, retryExtension, repairExtension, restartApp
-        case requestCameraAccess, cameraSettings, retryCapture, showSettings
+        case requestCameraAccess, cameraSettings, retryCapture, restartZoom, showSettings
 
         var title: String {
             switch self {
@@ -19,6 +19,7 @@ struct CameraAttentionIssue: Equatable {
             case .requestCameraAccess: return "Allow Camera Access…"
             case .cameraSettings: return "Open Camera Privacy Settings…"
             case .retryCapture: return "Retry Physical Camera"
+            case .restartZoom: return "Restart Zoom"
             case .showSettings: return "Open MovemberCam Settings…"
             }
         }
@@ -33,6 +34,7 @@ struct CameraAttentionIssue: Equatable {
         case .cameraPermission: return ("Allow camera access", "Open MovemberCam to allow access.")
         case .missingCamera: return ("No camera connected", "Connect a camera, then open MovemberCam.")
         case .captureFailure: return ("Camera stopped", "Open MovemberCam to reconnect.")
+        case .videoAppRestart: return ("Restart Zoom for MovemberCam", "Finish any call, then restart Zoom.")
         }
     }
 

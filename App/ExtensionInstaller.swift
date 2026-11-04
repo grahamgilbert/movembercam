@@ -64,6 +64,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     var captureSuspensionChanged: (Bool) -> Void = { _ in }
     var refreshCamera: () -> Void = {}
     var reconnectCamera: () -> Void = {}
+    var cameraRegistrationWillChange: () -> Void = {}
     var restartForStaleDiscovery: (() -> Bool)?
     var probeFreshCamera: (@escaping (CameraDiscoveryProbe.Result) -> Void) -> Void = CameraDiscoveryProbe.run
 
@@ -176,6 +177,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     func repairRegistration() {
         guard !terminating, canInstall, !busy, state == .unavailable, registrationRepairNeeded else { return }
         recoveryAttempts = 0
+        cameraRegistrationWillChange()
         repairingRegistration = true
         verificationID = UUID()
         state = .installing
@@ -203,6 +205,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
     }
 
     private func activate() {
+        if !lastCameraStatus.isInstalled || lastCameraStatus == .requiresUpdate { cameraRegistrationWillChange() }
         verificationID = UUID()
         statusCheckError = nil
         state = .installing
@@ -321,6 +324,7 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
 
     func requestNeedsUserApproval(_ request: OSSystemExtensionRequest) {
         guard !terminating, request === changeRequest else { return }
+        cameraRegistrationWillChange()
         verificationID = UUID()
         statusCheckError = nil
         Self.logger.notice("Activation awaiting user approval request=\(ObjectIdentifier(request).hashValue, privacy: .public)")
@@ -332,7 +336,9 @@ final class ExtensionInstaller: NSObject, ObservableObject, OSSystemExtensionReq
         guard !terminating else { return .cancel }
         let old = CameraExtensionVersion(release: existing.bundleShortVersion, build: existing.bundleVersion)
         let new = CameraExtensionVersion(release: ext.bundleShortVersion, build: ext.bundleVersion)
-        return new < old ? .cancel : .replace
+        if new < old { return .cancel }
+        cameraRegistrationWillChange()
+        return .replace
     }
 
     func request(_ request: OSSystemExtensionRequest, didFinishWithResult result: OSSystemExtensionRequest.Result) {

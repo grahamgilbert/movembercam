@@ -30,6 +30,8 @@ After a camera extension update, MovemberCam retries connecting automatically. I
 
 App-only updates keep the existing camera extension running. If macOS enables a changed camera extension but fails to start it, Settings offers **Repair Virtual Camera**. Repair resets its registration and macOS asks you to approve the camera again; MovemberCam then reconnects automatically.
 
+If Zoom was open during camera setup, MovemberCam tracks that Zoom process and prompts you to restart it, with a menu bar warning, a short Notification Center alert, and **Restart Zoom** actions. This warning stays visible even when the camera itself is healthy and Settings is closed. Finish any call before choosing Restart Zoom. Reopening Zoom clears the warning automatically; if you can already select MovemberCam, choose **Camera is already listed** in Settings. Pending restart state survives a MovemberCam relaunch.
+
 Settings also has **Open at Login**, automatic update preferences, and **Check for Updates…**. Opening Settings starts the camera for its preview. Launching at login keeps Settings hidden and leaves the camera off until a video app uses MovemberCam.
 
 To remove the virtual camera, close apps using MovemberCam and choose **Camera → Remove Virtual Camera**.
