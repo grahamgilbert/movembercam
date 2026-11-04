@@ -28,6 +28,8 @@ final class AppModel: ObservableObject {
     private var engine: CameraEngine?
     private var observers: [NSObjectProtocol] = []
     private var cameraObservation: NSKeyValueObservation?
+    // Automatic fallbacks must not replace the user's preferred camera.
+    private var preferredCameraID: String
     private var generation = UUID()
     private var demand = CameraCaptureDemand()
     private var isShuttingDown = false
@@ -42,6 +44,7 @@ final class AppModel: ObservableObject {
          cameraAuthorization: @escaping () -> AVAuthorizationStatus = { AVCaptureDevice.authorizationStatus(for: .video) },
          requestCameraAccess: @escaping () async -> Bool = { await AVCaptureDevice.requestAccess(for: .video) }) {
         self.defaults = defaults
+        preferredCameraID = defaults.string(forKey: "MovemberCam.cameraID") ?? ""
         self.cameraAuthorization = cameraAuthorization
         self.requestCameraAccess = requestCameraAccess
         let stored = OverlayPreferences.load(from: defaults)
@@ -83,8 +86,6 @@ final class AppModel: ObservableObject {
         cameraObservation = CameraEngine.discoverySession.observe(\.devices, options: [.new]) { [weak self] _, _ in
             Task { @MainActor in self?.refreshCameras() }
         }
-        selectedCameraID = defaults.string(forKey: "MovemberCam.cameraID") ?? ""
-        if !cameras.contains(where: { $0.id == selectedCameraID }) { selectedCameraID = cameras.first?.id ?? "" }
         for name in [AVCaptureDevice.wasConnectedNotification, AVCaptureDevice.wasDisconnectedNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in self?.refreshCameras() }
@@ -143,16 +144,24 @@ final class AppModel: ObservableObject {
         }
         cameras = CameraEngine.cameras()
         engine?.refreshVirtualCameraAvailability()
-        let availableID = cameras.contains(where: { $0.id == selectedCameraID })
-            ? selectedCameraID : cameras.first?.id ?? ""
+        let availableID: String
+        if cameras.contains(where: { $0.id == preferredCameraID }) {
+            availableID = preferredCameraID
+        } else {
+            availableID = cameras.contains(where: { $0.id == selectedCameraID })
+                ? selectedCameraID : cameras.first?.id ?? ""
+        }
         if availableID != selectedCameraID {
             let wasCapturing = isRunning || isBusy
+            let disconnected = !cameras.contains(where: { $0.id == selectedCameraID })
             selectedCameraID = availableID
             demand.hasFailed = false
             if wasCapturing {
                 stop()
-                error = availableID.isEmpty ? "The selected camera disconnected. Connect a camera to continue."
-                    : "The selected camera disconnected. Using the next available camera."
+                error = disconnected
+                    ? (availableID.isEmpty ? "The selected camera disconnected. Connect a camera to continue."
+                        : "The selected camera disconnected. Using the next available camera.")
+                    : nil
             }
         }
         reconcileCapture()
@@ -178,10 +187,12 @@ final class AppModel: ObservableObject {
     }
 
     func selectCamera(_ cameraID: String) {
-        guard !isBusy, cameraID != selectedCameraID,
+        guard !isBusy,
               cameras.contains(where: { $0.id == cameraID }) else { return }
-        selectedCameraID = cameraID
+        preferredCameraID = cameraID
         defaults.set(cameraID, forKey: "MovemberCam.cameraID")
+        guard cameraID != selectedCameraID else { return }
+        selectedCameraID = cameraID
         demand.hasFailed = false
         if isRunning { stop() } else { reconcileCapture() }
     }
@@ -240,7 +251,10 @@ final class AppModel: ObservableObject {
                     self.error = error?.localizedDescription
                     self.cameraFailure = error?.localizedDescription
                     self.demand.hasFailed = error != nil
-                    if error == nil { self.defaults.set(cameraID, forKey: "MovemberCam.cameraID") }
+                    if error == nil && self.preferredCameraID.isEmpty {
+                        self.preferredCameraID = cameraID
+                        self.defaults.set(cameraID, forKey: "MovemberCam.cameraID")
+                    }
                     self.reconcileCapture()
                 }
             }
