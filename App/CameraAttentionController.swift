@@ -16,6 +16,7 @@ final class CameraAttentionController: ObservableObject {
     }
     private let notifications: CameraIssueNotifying
     private let defaults: UserDefaults
+    private let zoom: ZoomRestartTracker
     // 1.0.4 could record a delivered notification whose foreground banner was
     // suppressed. Allow one corrected alert for an unresolved issue after upgrading.
     private static let deliveredKey = "MovemberCam.deliveredCameraIssues.v2"
@@ -29,13 +30,23 @@ final class CameraAttentionController: ObservableObject {
     private var stopped = false
     private var isWorking = false
 
-    init(notifications: CameraIssueNotifying? = nil, defaults: UserDefaults = .standard) {
+    init(notifications: CameraIssueNotifying? = nil, defaults: UserDefaults = .standard, zoom: ZoomRestartTracker? = nil) {
         let notifications = notifications ?? CameraIssueNotifications()
         self.notifications = notifications
         self.defaults = defaults
+        self.zoom = zoom ?? ZoomRestartTracker(defaults: defaults)
         policy = CameraAttentionNotificationPolicy(delivered: Set((defaults.stringArray(forKey: Self.deliveredKey) ?? [])
             .compactMap(CameraAttentionIssue.Kind.init(rawValue:))))
         notifications.onOpenSettings = { [weak self] in self?.showSettings() }
+        notifications.onRecover = { [weak self] kind in
+            guard let self, !self.stopped else { return }
+            self.refresh()
+            guard self.issue?.kind == kind else {
+                self.showSettings()
+                return
+            }
+            self.recover()
+        }
         notifications.shouldPresent = { [weak self] kind in
             guard let self else { return false }
             return !self.stopped && !self.isWorking && self.issue?.kind == kind
@@ -51,6 +62,7 @@ final class CameraAttentionController: ObservableObject {
         installer.captureSuspensionChanged = model.setCaptureSuspended
         installer.refreshCamera = model.refreshCameras
         installer.reconnectCamera = model.reconnectVirtualCamera
+        installer.cameraRegistrationWillChange = { [weak zoom] in zoom?.cameraWillChange() }
         model.setCaptureSuspended(installer.blocksCapture)
 
         model.$virtualCameraStatus.receive(on: DispatchQueue.main).sink { [weak installer] status in
@@ -70,6 +82,11 @@ final class CameraAttentionController: ObservableObject {
         Publishers.MergeMany(updates).receive(on: DispatchQueue.main).sink { [weak self] in
             self?.refresh()
         }.store(in: &subscriptions)
+        zoom.objectWillChange.receive(on: DispatchQueue.main).sink { [weak self] in self?.refresh() }.store(in: &subscriptions)
+        for event in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
+            NSWorkspace.shared.notificationCenter.publisher(for: event).receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refresh() }.store(in: &subscriptions)
+        }
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main).sink { [weak self] _ in
                 guard let self else { return }
@@ -84,6 +101,7 @@ final class CameraAttentionController: ObservableObject {
         // Approval can change while another app, such as Zoom, stays in front.
         Timer.publish(every: 5, on: .main, in: .common).autoconnect().sink { [weak self] _ in
             self?.recheckPendingApproval()
+            self?.refresh()
         }.store(in: &subscriptions)
         installer.checkForUpgrade()
         refresh()
@@ -104,6 +122,7 @@ final class CameraAttentionController: ObservableObject {
         switch issue.recovery {
         case .installExtension, .retryExtension, .repairExtension: return !installer.busy
         case .requestCameraAccess, .retryCapture, .restartApp: return !model.isBusy
+        case .restartZoom: return !zoom.isRestarting
         default: return true
         }
     }
@@ -121,6 +140,7 @@ final class CameraAttentionController: ObservableObject {
         case .requestCameraAccess: model.performCameraAction()
         case .cameraSettings: model.openCameraSettings()
         case .retryCapture: showSettings(); model.retryCamera()
+        case .restartZoom: zoom.restartZoomForUser()
         case .showSettings: showSettings()
         }
     }
@@ -128,24 +148,29 @@ final class CameraAttentionController: ObservableObject {
     func prepareForTermination() {
         stopped = true
         installer?.stopRecovery()
+        zoom.stop()
         deliveryTask?.cancel()
     }
 
     private func refresh() {
         guard !stopped, let model, let installer else { return }
+        if installer.state == .removed { zoom.cameraRemoved() }
+        zoom.refresh(cameraReady: installer.isReady && model.virtualCameraStatus.isUsable)
         let snapshot = CameraAttentionSnapshot(extensionState: installer.state, extensionMessage: installer.message,
             extensionRecovery: installer.recoveryAction, outputStatus: model.virtualCameraStatus,
             cameraPermission: model.cameraControls.permission, hasCamera: !model.selectedCameraID.isEmpty,
             captureFailure: model.cameraFailure, isBusy: model.isBusy)
         let previous = issue
-        isWorking = installer.showsProgress || installer.state == .unchecked || model.isBusy
-        var nextIssue = snapshot.issue
-        if nextIssue == nil, let previous, !snapshot.isHealthy, isWorking {
+        isWorking = installer.showsProgress || installer.state == .unchecked || model.isBusy || zoom.isLoading || zoom.isRestarting
+        let clientIssue = installer.isReady && model.virtualCameraStatus.isUsable ? zoom.issue : nil
+        let healthy = snapshot.isHealthy && clientIssue == nil && !zoom.isLoading
+        var nextIssue = snapshot.issue ?? clientIssue
+        if nextIssue == nil, let previous, !healthy, isWorking {
             nextIssue = CameraAttentionIssue(kind: previous.kind, title: "Camera recovery in progress",
                 message: installer.state.connectionSummary ?? "Updating the physical camera…", recovery: .showSettings)
         }
         if issue != nextIssue { issue = nextIssue }
-        if snapshot.isHealthy || installer.state == .removed {
+        if healthy || installer.state == .removed {
             let hadDelivered = !policy.delivered.isEmpty
             policy.recovered()
             if hadDelivered { persistDelivered() }
@@ -182,6 +207,8 @@ final class CameraAttentionController: ObservableObject {
             }
         }
     }
+
+    func acknowledgeZoomCamera() { zoom.acknowledge() }
 
     private func persistDelivered() {
         defaults.set(policy.delivered.map(\.rawValue).sorted(), forKey: Self.deliveredKey)

@@ -22,7 +22,7 @@ build/verification/ExtensionUpgradeChecks
 
 swiftc -swift-version 5 -module-cache-path build/ModuleCache.noindex \
   Shared/VideoFormat.swift Shared/OverlayConfiguration.swift Shared/OverlayPreferences.swift \
-  Shared/VirtualCameraStatus.swift Shared/CameraControlState.swift Shared/CameraExtensionUpgrade.swift Shared/CameraAttention.swift \
-  App/AppModel.swift App/CameraDiscoveryProbe.swift App/ExtensionInstaller.swift App/CameraIssueNotifications.swift App/CameraAttentionController.swift \
+  Shared/VirtualCameraStatus.swift Shared/CameraControlState.swift Shared/CameraExtensionUpgrade.swift Shared/CameraAttention.swift Shared/VideoAppRestartState.swift \
+  App/AppModel.swift App/CameraDiscoveryProbe.swift App/ExtensionInstaller.swift App/CameraIssueNotifications.swift App/ZoomRestartTracker.swift App/CameraAttentionController.swift \
   Tests/Support/CameraEngineStub.swift Tests/CameraAttentionChecks.swift -o build/verification/CameraAttentionChecks
 build/verification/CameraAttentionChecks
