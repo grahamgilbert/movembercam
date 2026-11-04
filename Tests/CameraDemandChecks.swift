@@ -12,6 +12,100 @@ import SwiftUI
         for _ in 0..<20 { await Task.yield() }
     }
 
+    static func checkAutomaticRecovery() async throws {
+        for previewOnly in [false, true] {
+            let suite = "MovemberCam.AutomaticRecoveryChecks.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suite)!
+            defer { defaults.removePersistentDomain(forName: suite) }
+            var retries: [@MainActor @Sendable () -> Void] = []
+            let model = AppModel(defaults: defaults, cameraAuthorization: { .authorized },
+                                 scheduleCameraRetry: { retries.append($0) })
+            let engine = CameraEngine.latest!
+            func requestCapture(_ needed: Bool) {
+                if previewOnly { model.setPreviewVisible(needed) }
+                else { engine.onDemand?(needed) }
+            }
+            requestCapture(true)
+            await settle()
+            engine.finishStart()
+            await settle()
+            engine.holdStop = true
+            engine.onFailure?("Recording Stopped")
+            engine.onFailure?("Duplicate disconnect")
+            await settle()
+            try check(retries.isEmpty && engine.stops == 1,
+                      "Recovery waits for capture shutdown and ignores duplicate errors")
+            engine.finishStop()
+            engine.holdStop = false
+            await settle()
+            try check(retries.count == 1 && model.previewStatus == "Camera stopped",
+                      "A stopped camera schedules recovery and displays its actual state")
+            retries.removeFirst()()
+            await settle()
+            try check(engine.starts.count == 2 && model.isBusy,
+                      previewOnly ? "Visible preview automatically retries a runtime failure"
+                        : "Background consumer automatically retries a runtime failure")
+            engine.finishStart()
+            await settle()
+            try check(model.isRunning && model.cameraFailure == nil, "Automatic recovery clears the capture failure")
+
+            engine.onFailure?("Persistent failure")
+            await settle()
+            try check(retries.isEmpty && !model.isRunning && engine.starts.count == 2,
+                      "A repeatedly failing camera cannot enter an automatic restart loop")
+            model.retryCamera()
+            await settle()
+            engine.finishStart()
+            await settle()
+            engine.onFailure?("Another disconnect")
+            await settle()
+            try check(retries.count == 1, "Explicit retry allows a new automatic recovery attempt")
+            requestCapture(false)
+            await settle()
+            let idleStarts = engine.starts.count
+            retries.removeFirst()()
+            await settle()
+            try check(engine.starts.count == idleStarts, "Pending recovery cannot open an idle camera")
+
+            requestCapture(true)
+            await settle()
+            engine.finishStart()
+            await settle()
+            engine.onFailure?("Disconnect before replacement")
+            await settle()
+            try check(retries.count == 1, "A new consumer session renews automatic recovery")
+            model.setCaptureSuspended(true)
+            retries.removeFirst()()
+            await settle()
+            try check(!model.isBusy && !model.isRunning,
+                      "Pending recovery respects suspension for extension replacement")
+            model.setCaptureSuspended(false)
+            model.retryCamera()
+            await settle()
+            engine.finishStart()
+            await settle()
+            engine.onFailure?("Disconnect before manual retry")
+            await settle()
+            try check(retries.count == 1, "Disconnect schedules one pending recovery")
+            model.retryCamera()
+            await settle()
+            let manualStarts = engine.starts.count
+            retries.removeFirst()()
+            await settle()
+            try check(engine.starts.count == manualStarts && model.isBusy,
+                      "A stale automatic retry cannot interrupt a manual retry")
+            engine.finishStart()
+            await settle()
+            engine.onFailure?("Disconnect before termination")
+            await settle()
+            try check(retries.count == 1, "Recovery can be pending when the app quits")
+            model.shutdown {}
+            retries.removeFirst()()
+            await settle()
+            try check(engine.starts.count == manualStarts, "Pending recovery cannot restart capture after termination")
+        }
+    }
+
     static func checkPreferredCamera() async throws {
         let suite = "MovemberCam.PreferredCameraChecks.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -234,6 +328,7 @@ import SwiftUI
         try check(!preview.isRunning, "Closing Settings alone releases a preview-only capture")
         preview.shutdown {}
         try await checkPreferredCamera()
+        try await checkAutomaticRecovery()
     }
 
     static func main() async {
