@@ -260,6 +260,14 @@ import SystemExtensions
         await settle(); await settle()
         try check(metadata.state.awaitingCamera && metadata.state.pending == nil,
                   "An old provider lookup cannot complete a newer camera registration")
+
+        let earlyNotifications = FakeCameraNotifications()
+        let early = CameraAttentionController(notifications: earlyNotifications, defaults: defaults, zoom: restored)
+        earlyNotifications.onRecover?(.videoAppRestart)
+        var earlyOpens = 0
+        early.onShowSettings = { earlyOpens += 1 }
+        try check(earlyOpens == 1, "A notification action before camera status loads opens Settings instead of silently doing nothing")
+        early.prepareForTermination()
     }
     static func main() async {
         do { try await run(); print("\(checks) camera attention checks passed") }

@@ -39,8 +39,13 @@ final class CameraAttentionController: ObservableObject {
             .compactMap(CameraAttentionIssue.Kind.init(rawValue:))))
         notifications.onOpenSettings = { [weak self] in self?.showSettings() }
         notifications.onRecover = { [weak self] kind in
-            guard self?.issue?.kind == kind else { return }
-            self?.recover()
+            guard let self, !self.stopped else { return }
+            self.refresh()
+            guard self.issue?.kind == kind else {
+                self.showSettings()
+                return
+            }
+            self.recover()
         }
         notifications.shouldPresent = { [weak self] kind in
             guard let self else { return false }

@@ -96,7 +96,7 @@ final class ZoomRestartTracker: ObservableObject {
                 needsOpen = false
                 Self.logger.notice("Zoom reopened successfully")
             } catch {
-                self.error = "Zoom could not reopen. Finish any call, close Zoom’s dialogs, then try Restart Zoom again."
+                self.error = "Zoom could not restart. Finish any call, close Zoom’s dialogs, then try Restart Zoom again."
                 needsOpen = running() == nil
                 Self.logger.error("Zoom restart failed code=\((error as NSError).code, privacy: .public)")
             }
