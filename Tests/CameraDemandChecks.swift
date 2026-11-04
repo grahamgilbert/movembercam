@@ -12,6 +12,72 @@ import SwiftUI
         for _ in 0..<20 { await Task.yield() }
     }
 
+    static func checkPreferredCamera() async throws {
+        let suite = "MovemberCam.PreferredCameraChecks.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let originalChoices = CameraEngine.choices
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            CameraEngine.choices = originalChoices
+        }
+        let internalCamera = CameraChoice(id: "internal", name: "Internal")
+        let externalCamera = CameraChoice(id: "external", name: "External")
+        CameraEngine.choices = [internalCamera, externalCamera]
+        let model = AppModel(defaults: defaults, cameraAuthorization: { .authorized })
+        model.selectCamera("external")
+        let engine = CameraEngine.latest!
+        engine.onDemand?(true)
+        await settle()
+        engine.finishStart()
+        await settle()
+
+        CameraEngine.choices = [internalCamera]
+        model.refreshCameras()
+        await settle()
+        engine.finishStart()
+        await settle()
+        try check(model.isRunning && engine.starts == ["external", "internal"],
+                  "Disconnecting the preferred camera starts the fallback")
+        try check(defaults.string(forKey: "MovemberCam.cameraID") == "external",
+                  "Starting the fallback preserves the preferred camera")
+
+        CameraEngine.choices = [internalCamera, externalCamera]
+        model.refreshCameras()
+        await settle()
+        try check(model.selectedCameraID == "external" && engine.starts.last == "external",
+                  "Reconnecting the preferred camera switches active capture back")
+        engine.finishStart()
+        await settle()
+        let starts = engine.starts.count
+        model.refreshCameras()
+        await settle()
+        try check(engine.starts.count == starts, "Repeated discovery does not restart the preferred camera")
+
+        CameraEngine.choices = [internalCamera]
+        model.refreshCameras()
+        await settle()
+        engine.finishStart()
+        await settle()
+        model.shutdown {}
+
+        let relaunched = AppModel(defaults: defaults, cameraAuthorization: { .authorized })
+        try check(relaunched.selectedCameraID == "internal", "Launch uses a fallback while the preference is absent")
+        CameraEngine.choices = [internalCamera, externalCamera]
+        relaunched.refreshCameras()
+        try check(relaunched.selectedCameraID == "external" && CameraEngine.latest.starts.isEmpty,
+                  "The preferred camera is restored after relaunch without opening idle hardware")
+
+        CameraEngine.choices = [internalCamera]
+        relaunched.refreshCameras()
+        relaunched.selectCamera("internal")
+        CameraEngine.choices = [internalCamera, externalCamera]
+        relaunched.refreshCameras()
+        try check(relaunched.selectedCameraID == "internal"
+                  && defaults.string(forKey: "MovemberCam.cameraID") == "internal",
+                  "Explicitly selecting the fallback replaces the old preference")
+        relaunched.shutdown {}
+    }
+
     static func run() async throws {
         let suite = "MovemberCam.CameraDemandChecks.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -167,6 +233,7 @@ import SwiftUI
         await settle()
         try check(!preview.isRunning, "Closing Settings alone releases a preview-only capture")
         preview.shutdown {}
+        try await checkPreferredCamera()
     }
 
     static func main() async {
